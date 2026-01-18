@@ -154,7 +154,7 @@
 
     /* Engine UI */
     .main {
-      padding: 100px 24px 120px;
+      padding: 112px 24px 140px;
       max-width: 960px;
       margin: auto;
       min-height: 100vh;
@@ -164,15 +164,15 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 18px;
+      gap: 14px;
+      margin-bottom: 26px;
       flex-wrap: wrap;
     }
 
     .pill {
       background: rgba(79,124,255,0.12);
       border: 1px solid rgba(79,124,255,0.28);
-      padding: 10px 12px;
+      padding: 12px 14px;
       border-radius: 14px;
       color: var(--text);
       font-weight: 700;
@@ -188,8 +188,8 @@
 
     .question-card {
       background: linear-gradient(145deg, rgba(20,27,46,0.95), rgba(15,21,36,0.92));
-      border-radius: 20px;
-      padding: 24px;
+      border-radius: 22px;
+      padding: 30px;
       border: 1px solid rgba(255,255,255,0.06);
       box-shadow: 0 20px 60px rgba(0,0,0,0.35);
       backdrop-filter: blur(8px);
@@ -214,13 +214,22 @@
       width: 100%;
       border-radius: 14px;
       display: block;
-      margin: 12px 0 6px;
+      margin: 18px 0 10px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      animation: fadeUp 260ms cubic-bezier(.2,.9,.2,1) both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
       background: rgba(255,255,255,0.02);
       border: 1px solid rgba(255,255,255,0.06);
     }
 
     .buzz {
-      margin: 14px 0;
+      margin: 18px 0 16px;
       padding: 14px;
       border-radius: 14px;
       background: rgba(79,124,255,0.15);
@@ -246,7 +255,7 @@
       display: flex;
       justify-content: space-between;
       gap: 10px;
-      margin: 8px 0 0;
+      margin: 14px 0 10px;
       flex-wrap: wrap;
       color: var(--muted);
       font-weight: 650;
@@ -304,7 +313,7 @@
       align-items: center;
       justify-content: center;
       flex-wrap: wrap;
-      margin-top: 6px;
+      margin-top: 14px;
     }
 
     .btn {
@@ -342,7 +351,7 @@
     .btn:hover { transform: translateY(-1px); filter: brightness(1.06); }
 
     .feedback {
-      margin: 14px 0 0;
+      margin: 18px 0 0;
       min-height: 24px;
       font-weight: 800;
       letter-spacing: 0.2px;
@@ -619,70 +628,94 @@
 
       hideError();
 
-      // Enforce Toss-up -> Bonus pairing WITHIN THE SAME set+round.
-      // Prefer exact num match (TU num == Bonus num). If not found, use any remaining bonus in same round.
-      const byRound = new Map();
+      // Pairing priority:
+      // 1) SAME set_name + SAME category (subject)  ✅ most important
+      // 2) Prefer SAME round_name within that
+      // 3) Prefer SAME num within that
+      // 4) Fallback to any remaining bonus in same set+category
+      const groups = new Map();
       for (const q of filtered) {
-        const key = `${q.set_name}||${q.round_name}`;
-        if (!byRound.has(key)) byRound.set(key, []);
-        byRound.get(key).push(q);
+        const key = `${q.set_name}||${norm(q.category)}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(q);
       }
 
-      const roundKeys = Array.from(byRound.keys());
-      shuffle(roundKeys);
+      const groupKeys = Array.from(groups.keys());
+      shuffle(groupKeys);
 
       const paired = [];
 
-      for (const key of roundKeys) {
-        const items = byRound.get(key) || [];
+      for (const gk of groupKeys) {
+        const items = groups.get(gk) || [];
         const tossups = items.filter(q => !q.bonus);
         const bonuses = items.filter(q => q.bonus);
+        if (!tossups.length || !bonuses.length) continue;
 
-        // Shuffle tossups so practice feels random, but keep pairing correctness.
         shuffle(tossups);
 
-        // Build bonus lookup tables
-        const bonusByNum = new Map();
-        for (const b of bonuses) {
-          const n = Number.isFinite(b.num) ? b.num : parseInt(b.num, 10);
-          const bn = Number.isFinite(n) ? n : b.num;
-          if (!bonusByNum.has(bn)) bonusByNum.set(bn, []);
-          bonusByNum.get(bn).push(b);
-        }
-        // Shuffle each bucket to avoid always the same bonus when duplicates exist
-        for (const arr of bonusByNum.values()) shuffle(arr);
+        // Index bonuses by round + num, and also by num (any round)
+        const bonusByRoundNum = new Map(); // key: round||num -> [bonus]
+        const bonusByRoundAny = new Map(); // key: round -> [bonus]
+        const bonusByNumAny = new Map();   // key: num -> [bonus]
 
-        const remainingBonuses = bonuses.slice();
-        shuffle(remainingBonuses);
+        const toNumKey = (v) => {
+          const n = Number.isFinite(v) ? v : parseInt(v, 10);
+          return Number.isFinite(n) ? n : String(v);
+        };
+
+        for (const b of bonuses) {
+          const bn = toNumKey(b.num);
+          const rn = String(b.round_name || '');
+          const k1 = `${rn}||${bn}`;
+          if (!bonusByRoundNum.has(k1)) bonusByRoundNum.set(k1, []);
+          bonusByRoundNum.get(k1).push(b);
+
+          if (!bonusByRoundAny.has(rn)) bonusByRoundAny.set(rn, []);
+          bonusByRoundAny.get(rn).push(b);
+
+          if (!bonusByNumAny.has(bn)) bonusByNumAny.set(bn, []);
+          bonusByNumAny.get(bn).push(b);
+        }
+
+        // Shuffle buckets so we don't always pop the same one
+        for (const arr of bonusByRoundNum.values()) shuffle(arr);
+        for (const arr of bonusByRoundAny.values()) shuffle(arr);
+        for (const arr of bonusByNumAny.values()) shuffle(arr);
+
+        const remaining = bonuses.slice();
+        shuffle(remaining);
 
         const usedBonus = new Set();
 
+        const takeFrom = (arr) => {
+          while (arr && arr.length) {
+            const cand = arr.pop();
+            if (cand && !usedBonus.has(cand)) return cand;
+          }
+          return null;
+        };
+
         for (const t of tossups) {
-          // TU always goes first
+          const tr = String(t.round_name || '');
+          const tn = toNumKey(t.num);
+
+          // Always add TU first, but we may roll it back if no bonus exists.
           paired.push(t);
 
-          // Try to find matching bonus by num
           let match = null;
-          const tn = Number.isFinite(t.num) ? t.num : parseInt(t.num, 10);
-          const tnum = Number.isFinite(tn) ? tn : t.num;
 
-          const bucket = bonusByNum.get(tnum);
-          if (bucket && bucket.length) {
-            while (bucket.length) {
-              const cand = bucket.pop();
-              if (cand && !usedBonus.has(cand)) { match = cand; break; }
-            }
-          }
+          // 3) Prefer same round+num
+          match = takeFrom(bonusByRoundNum.get(`${tr}||${tn}`));
 
-          // Fallback: any bonus in the same round not used yet
-          if (!match) {
-            while (remainingBonuses.length) {
-              const cand = remainingBonuses.pop();
-              if (cand && !usedBonus.has(cand)) { match = cand; break; }
-            }
-          }
+          // 2) Prefer same round (any num)
+          if (!match) match = takeFrom(bonusByRoundAny.get(tr));
 
-          // If we couldn't find a bonus, remove the TU we just added (keeps TU->Bonus rhythm)
+          // 3-alt) Same num (any round) — sometimes round naming differs
+          if (!match) match = takeFrom(bonusByNumAny.get(tn));
+
+          // 4) Any remaining bonus in same set+category
+          if (!match) match = takeFrom(remaining);
+
           if (!match) {
             paired.pop();
             continue;
@@ -694,7 +727,6 @@
       }
 
       let n = Math.max(2, Math.min(100, parseInt(runCfg.count, 10) || 25));
-      // Keep TU->Bonus rhythm (even length)
       if (n % 2 === 1) n -= 1;
 
       return paired.slice(0, Math.min(n, paired.length));
@@ -970,14 +1002,17 @@
       index = 0;
       console.assert(!!currentQ(), 'currentQ should exist in bounds');
 
-      // Pairing test (TU then Bonus, same round pairing)
+      // Pairing test (TU then Bonus, SAME subject/category; round is secondary)
       const mini = [
+        // Set S1, Round r1
         { set_name: 'S1', round_name: 'r1', num: 10, bonus: false, level: 'MS', category: 'PHYSICS', type: 'SA', question_image: 'ms/a.png' },
-        { set_name: 'S1', round_name: 'r1', num: 10, bonus: true,  level: 'MS', category: 'PHYSICS', type: 'SA', question_image: 'ms/b.png' },
+        // Wrong subject bonus in same round — should NOT match
+        { set_name: 'S1', round_name: 'r1', num: 10, bonus: true,  level: 'MS', category: 'CHEMISTRY', type: 'SA', question_image: 'ms/bad1.png' },
+        // Correct subject bonus but different round — should match BEFORE wrong subject
+        { set_name: 'S1', round_name: 'r2', num: 10, bonus: true,  level: 'MS', category: 'PHYSICS', type: 'SA', question_image: 'ms/b.png' },
+        // Another TU/Bonus pair
         { set_name: 'S1', round_name: 'r1', num: 11, bonus: false, level: 'MS', category: 'PHYSICS', type: 'SA', question_image: 'ms/c.png' },
         { set_name: 'S1', round_name: 'r1', num: 11, bonus: true,  level: 'MS', category: 'PHYSICS', type: 'SA', question_image: 'ms/d.png' },
-        // Different round, should NOT be used as a match for r1
-        { set_name: 'S1', round_name: 'r2', num: 10, bonus: true,  level: 'MS', category: 'PHYSICS', type: 'SA', question_image: 'ms/e.png' },
       ];
       const savedBank = bank;
       const savedCfg = { ...runCfg };
@@ -992,11 +1027,11 @@
       const out = buildRunQuestions();
       console.assert(out.length === 4, 'paired length should be 4');
       console.assert(out[0].bonus === false && out[1].bonus === true, 'first pair should be TU then Bonus');
-      console.assert(out[0].round_name === out[1].round_name && out[0].set_name === out[1].set_name, 'pair 1 must be same set+round');
-      console.assert(out[0].num === out[1].num, 'pair 1 should prefer num match');
+      console.assert(out[0].set_name === out[1].set_name, 'pair 1 must be same set');
+      console.assert(out[0].category === out[1].category, 'pair 1 must be same category/subject');
       console.assert(out[2].bonus === false && out[3].bonus === true, 'second pair should be TU then Bonus');
-      console.assert(out[2].round_name === out[3].round_name && out[2].set_name === out[3].set_name, 'pair 2 must be same set+round');
-      console.assert(out[2].num === out[3].num, 'pair 2 should prefer num match');
+      console.assert(out[2].set_name === out[3].set_name, 'pair 2 must be same set');
+      console.assert(out[2].category === out[3].category, 'pair 2 must be same category/subject');
       bank = savedBank;
       Object.assign(runCfg, savedCfg);
 
