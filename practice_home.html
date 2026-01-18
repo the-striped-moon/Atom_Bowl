@@ -582,14 +582,8 @@
         els.bankStatus.style.borderColor = 'rgba(57,217,138,0.24)';
         els.bankMeta.textContent = `${bank.length.toLocaleString()} questions detected`;
 
-        const cats = uniqueSorted(bank.map(q => normCat(q.category)));
-        const cleaned = cats.filter(c => c.length < 40);
-        for (const c of cleaned) {
-          const opt = document.createElement('option');
-          opt.value = c;
-          opt.textContent = c;
-          els.category.appendChild(opt);
-        }
+        // Categories are fixed (do not auto-append from bank)
+        // Intentionally skipped dynamic category injection to avoid duplicates
 
         updateCounts();
       } catch (e) {
