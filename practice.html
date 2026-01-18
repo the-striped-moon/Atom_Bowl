@@ -396,11 +396,10 @@
   <div class="hamburger" id="hamburger">☰</div>
 
   <div class="main">
-
     <div id="err" class="error hidden"></div>
 
     <div class="topbar">
-      <div class="pill"><small>Timer</small> <span id="timer">10</span></div>
+      <div class="pill"><small>Timer</small> <span id="timer">20</span></div>
       <div class="pill"><small>Score</small> <span id="score">0</span></div>
       <div class="pill"><small>Q</small> <span id="qnum">0</span>/<span id="qtotal">0</span></div>
       <div class="pill"><small>Mode</small> <span id="mode">—</span></div>
@@ -435,7 +434,6 @@
       <p class="feedback" id="feedback"></p>
       <div class="hint">Tip: W/X/Y/Z keys work after buzzing. Press Esc to go back. (Grading: R=Right, W=Wrong)</div>
     </div>
-
   </div>
 
   <script>
@@ -462,7 +460,7 @@
       qaType: 'ANY',
       bonus: 'ANY',
       count: 25,
-      seconds: 10,
+      seconds: 20,
       setName: '',
       roundName: ''
     };
@@ -503,7 +501,7 @@
     let bank = [];
     let questions = [];
     let index = 0;
-    let time = 10;
+    let time = 20;
     let timerId = null;
     let buzzed = false;
     let locked = false;
@@ -532,7 +530,6 @@
 
     function norm(s) { return String(s || '').trim(); }
 
-    // Safe current question getter
     function currentQ() {
       if (!Array.isArray(questions) || questions.length === 0) return null;
       if (index < 0 || index >= questions.length) return null;
@@ -607,7 +604,7 @@
     }
 
     function buildRunQuestions() {
-      let filtered = applyFilters(bank);
+      const filtered = applyFilters(bank);
       if (!filtered.length) {
         const parts = [];
         if (runCfg.level !== 'ANY') parts.push(`level=${runCfg.level}`);
@@ -621,9 +618,86 @@
       }
 
       hideError();
-      filtered = shuffle(filtered);
-      const n = Math.max(5, Math.min(100, parseInt(runCfg.count, 10) || 25));
-      return filtered.slice(0, Math.min(n, filtered.length));
+
+      // Enforce Toss-up -> Bonus pairing WITHIN THE SAME set+round.
+      // Prefer exact num match (TU num == Bonus num). If not found, use any remaining bonus in same round.
+      const byRound = new Map();
+      for (const q of filtered) {
+        const key = `${q.set_name}||${q.round_name}`;
+        if (!byRound.has(key)) byRound.set(key, []);
+        byRound.get(key).push(q);
+      }
+
+      const roundKeys = Array.from(byRound.keys());
+      shuffle(roundKeys);
+
+      const paired = [];
+
+      for (const key of roundKeys) {
+        const items = byRound.get(key) || [];
+        const tossups = items.filter(q => !q.bonus);
+        const bonuses = items.filter(q => q.bonus);
+
+        // Shuffle tossups so practice feels random, but keep pairing correctness.
+        shuffle(tossups);
+
+        // Build bonus lookup tables
+        const bonusByNum = new Map();
+        for (const b of bonuses) {
+          const n = Number.isFinite(b.num) ? b.num : parseInt(b.num, 10);
+          const bn = Number.isFinite(n) ? n : b.num;
+          if (!bonusByNum.has(bn)) bonusByNum.set(bn, []);
+          bonusByNum.get(bn).push(b);
+        }
+        // Shuffle each bucket to avoid always the same bonus when duplicates exist
+        for (const arr of bonusByNum.values()) shuffle(arr);
+
+        const remainingBonuses = bonuses.slice();
+        shuffle(remainingBonuses);
+
+        const usedBonus = new Set();
+
+        for (const t of tossups) {
+          // TU always goes first
+          paired.push(t);
+
+          // Try to find matching bonus by num
+          let match = null;
+          const tn = Number.isFinite(t.num) ? t.num : parseInt(t.num, 10);
+          const tnum = Number.isFinite(tn) ? tn : t.num;
+
+          const bucket = bonusByNum.get(tnum);
+          if (bucket && bucket.length) {
+            while (bucket.length) {
+              const cand = bucket.pop();
+              if (cand && !usedBonus.has(cand)) { match = cand; break; }
+            }
+          }
+
+          // Fallback: any bonus in the same round not used yet
+          if (!match) {
+            while (remainingBonuses.length) {
+              const cand = remainingBonuses.pop();
+              if (cand && !usedBonus.has(cand)) { match = cand; break; }
+            }
+          }
+
+          // If we couldn't find a bonus, remove the TU we just added (keeps TU->Bonus rhythm)
+          if (!match) {
+            paired.pop();
+            continue;
+          }
+
+          usedBonus.add(match);
+          paired.push(match);
+        }
+      }
+
+      let n = Math.max(2, Math.min(100, parseInt(runCfg.count, 10) || 25));
+      // Keep TU->Bonus rhythm (even length)
+      if (n % 2 === 1) n -= 1;
+
+      return paired.slice(0, Math.min(n, paired.length));
     }
 
     function resetForQuestion() {
@@ -643,7 +717,7 @@
 
       buzzEl.innerHTML = 'Press <span class="kbd">SPACE</span> to buzz';
 
-      time = Math.max(5, Math.min(30, parseInt(runCfg.seconds, 10) || 10));
+      time = Math.max(5, Math.min(30, parseInt(runCfg.seconds, 10) || 20));
       timerEl.textContent = String(time);
 
       clearInterval(timerId);
@@ -675,6 +749,20 @@
       metaRight.textContent = `${q.set_name} / ${q.round_name} • #${q.num}`;
 
       resetForQuestion();
+
+      // Text-to-speech (only if text exists)
+      if ('speechSynthesis' in window) {
+        const text = String(q.question_text || '').trim();
+        if (text) {
+          const prefix = q.bonus ? 'Bonus. ' : 'Toss-up. ';
+          const utter = new SpeechSynthesisUtterance(prefix + text);
+          utter.rate = 0.95;
+          utter.pitch = 1.0;
+          utter.volume = 0.9;
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(utter);
+        }
+      }
     }
 
     function allowAnswerUI() {
@@ -731,10 +819,14 @@
       if (!awaitingGrade) return;
       awaitingGrade = false;
 
+      const q = currentQ();
+      const points = q && q.bonus ? 10 : 4;
+
       if (isRight) {
-        score += 1;
+        score += points;
         scoreEl.textContent = String(score);
         feedback.className = 'feedback good';
+        feedback.textContent += ` (+${points})`;
       } else {
         feedback.className = 'feedback bad';
       }
@@ -790,7 +882,6 @@
       qnumEl.textContent = String(total ? Math.min(index + 1, total) : 0);
       qtotalEl.textContent = String(total);
 
-      // prevent stray state
       buzzed = false;
       locked = true;
       awaitingGrade = false;
@@ -819,7 +910,6 @@
         return;
       }
 
-      // Ignore keybinds until a run is active and a current question exists
       const q = currentQ();
       if (!runActive || !q) return;
 
@@ -874,11 +964,41 @@
       questions = [];
       index = 0;
       console.assert(currentQ() === null, 'currentQ should be null on empty');
-      questions = [{ type: 'SA', level: 'MS', question_image: 'ms/Sample-Set-1/m_round02/10_0.png' }];
+      questions = [{ type: 'SA', level: 'MS', bonus: false, question_image: 'ms/Sample-Set-1/m_round02/10_0.png' }];
       index = 1;
       console.assert(currentQ() === null, 'currentQ should be null on OOB index');
       index = 0;
       console.assert(!!currentQ(), 'currentQ should exist in bounds');
+
+      // Pairing test (TU then Bonus, same round pairing)
+      const mini = [
+        { set_name: 'S1', round_name: 'r1', num: 10, bonus: false, level: 'MS', category: 'PHYSICS', type: 'SA', question_image: 'ms/a.png' },
+        { set_name: 'S1', round_name: 'r1', num: 10, bonus: true,  level: 'MS', category: 'PHYSICS', type: 'SA', question_image: 'ms/b.png' },
+        { set_name: 'S1', round_name: 'r1', num: 11, bonus: false, level: 'MS', category: 'PHYSICS', type: 'SA', question_image: 'ms/c.png' },
+        { set_name: 'S1', round_name: 'r1', num: 11, bonus: true,  level: 'MS', category: 'PHYSICS', type: 'SA', question_image: 'ms/d.png' },
+        // Different round, should NOT be used as a match for r1
+        { set_name: 'S1', round_name: 'r2', num: 10, bonus: true,  level: 'MS', category: 'PHYSICS', type: 'SA', question_image: 'ms/e.png' },
+      ];
+      const savedBank = bank;
+      const savedCfg = { ...runCfg };
+      bank = mini;
+      runCfg.level = 'ANY';
+      runCfg.category = 'ANY';
+      runCfg.qaType = 'ANY';
+      runCfg.bonus = 'ANY';
+      runCfg.setName = '';
+      runCfg.roundName = '';
+      runCfg.count = 4;
+      const out = buildRunQuestions();
+      console.assert(out.length === 4, 'paired length should be 4');
+      console.assert(out[0].bonus === false && out[1].bonus === true, 'first pair should be TU then Bonus');
+      console.assert(out[0].round_name === out[1].round_name && out[0].set_name === out[1].set_name, 'pair 1 must be same set+round');
+      console.assert(out[0].num === out[1].num, 'pair 1 should prefer num match');
+      console.assert(out[2].bonus === false && out[3].bonus === true, 'second pair should be TU then Bonus');
+      console.assert(out[2].round_name === out[3].round_name && out[2].set_name === out[3].set_name, 'pair 2 must be same set+round');
+      console.assert(out[2].num === out[3].num, 'pair 2 should prefer num match');
+      bank = savedBank;
+      Object.assign(runCfg, savedCfg);
 
       // Image resolver sanity
       const qms = { level: 'MS', question_image: 'ms/Sample-Set-1/m_round02/10_0.png' };
@@ -892,7 +1012,6 @@
     (async () => {
       runSelfTests();
 
-      // Reset mutated test state
       questions = [];
       index = 0;
 
