@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Atom Bowl — Question Bank</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --panel: #121824;
+      --accent: #4f7cff;
+      --text: #e6eaf0;
+      --muted: #9aa4b2;
+      --good: #39d98a;
+      --bad: #ff6b6b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: -20vh -20vw;
+      background:
+        radial-gradient(900px 500px at 20% 10%, rgba(79,124,255,0.28), transparent 55%),
+        radial-gradient(700px 420px at 80% 20%, rgba(57,217,138,0.14), transparent 60%),
+        radial-gradient(900px 520px at 60% 90%, rgba(255,107,107,0.12), transparent 62%);
+      filter: blur(18px);
+      opacity: 0.9;
+      animation: drift 14s ease-in-out infinite alternate;
+      z-index: -2;
+      pointer-events: none;
+    }
+
+    @keyframes drift {
+      from { transform: translate3d(-1.2%, -0.8%, 0) scale(1); }
+      to   { transform: translate3d( 1.2%,  0.9%, 0) scale(1.02); }
+    }
+
+    .waves {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: -2px;
+      height: 170px;
+      z-index: -1;
+      pointer-events: none;
+      opacity: 0.55;
+    }
+
+    .waves svg {
+      width: 120%;
+      height: 100%;
+      transform: translateX(-8%);
+    }
+
+    .wave1 { animation: waveMove 10s ease-in-out infinite; }
+    .wave2 { animation: waveMove 14s ease-in-out infinite reverse; opacity: 0.7; }
+
+    @keyframes waveMove {
+      0%   { transform: translateX(-8%); }
+      50%  { transform: translateX(-2%); }
+      100% { transform: translateX(-8%); }
+    }
+
+    /* NAV */
+    .nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      width: 280px;
+      background: var(--panel);
+      padding: 24px 24px 48px;
+      transform: translateX(-100%);
+      transition: transform 0.42s cubic-bezier(.2,.9,.2,1);
+      z-index: 1000;
+    }
+
+    .nav.open { transform: translateX(0); }
+
+    .nav-title {
+      font-weight: 700;
+      font-size: 1.4rem;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nav a {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin: 12px 0;
+      padding: 12px 14px;
+      border-radius: 12px;
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 500;
+      transition: background 0.25s, color 0.25s, transform 0.15s;
+    }
+
+    .nav a:hover {
+      background: rgba(79, 124, 255, 0.15);
+      color: var(--accent);
+      transform: translateX(4px);
+    }
+
+    .icon { width: 22px; text-align: center; }
+
+    .hamburger {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      font-size: 28px;
+      cursor: pointer;
+      z-index: 1100;
+      user-select: none;
+      transition: left 0.35s ease;
+    }
+
+    .hamburger.open { left: 300px; }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.42s cubic-bezier(.2,.9,.2,1);
+      z-index: 900;
+    }
+
+    .overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* Page */
+    .main {
+      padding: 112px 24px 140px;
+      max-width: 1280px;
+      margin: auto;
+      min-height: 100vh;
+    }
+
+    .header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    .title {
+      font-size: 2.0rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+
+    .subtitle {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-weight: 650;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .input, .select {
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(18,24,36,0.85);
+      color: var(--text);
+      outline: none;
+      font-weight: 650;
+      min-width: 210px;
+    }
+
+    .input:focus, .select:focus {
+      border-color: rgba(79,124,255,0.55);
+      box-shadow: 0 0 0 6px rgba(79,124,255,0.10);
+    }
+
+    .pill {
+      background: rgba(79,124,255,0.12);
+      border: 1px solid rgba(79,124,255,0.28);
+      padding: 10px 12px;
+      border-radius: 14px;
+      color: var(--text);
+      font-weight: 800;
+      display: inline-flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .pill small { color: var(--muted); font-weight: 800; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    @media (max-width: 1200px) {
+      .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 980px) {
+      .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 740px) {
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .input, .select { min-width: 160px; }
+    }
+
+    @media (max-width: 460px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .tile {
+      background: linear-gradient(145deg, rgba(20,27,46,0.95), rgba(15,21,36,0.92));
+      border-radius: 18px;
+      padding: 14px;
+      border: 1px solid rgba(255,255,255,0.06);
+      box-shadow: 0 16px 50px rgba(0,0,0,0.30);
+      backdrop-filter: blur(8px);
+      transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 170px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .tile::before {
+      content: "";
+      position: absolute;
+      inset: -60px;
+      background: radial-gradient(220px 180px at 20% 10%, rgba(79,124,255,0.20), transparent 60%);
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    .tile:hover {
+      transform: translateY(-2px);
+      border-color: rgba(79,124,255,0.22);
+      box-shadow: 0 22px 60px rgba(0,0,0,0.36);
+    }
+
+    .tagrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .tag {
+      font-size: 0.78rem;
+      font-weight: 800;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(0,0,0,0.20);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .tag.accent {
+      border-color: rgba(79,124,255,0.28);
+      background: rgba(79,124,255,0.12);
+      color: var(--text);
+    }
+
+    .tag.good {
+      border-color: rgba(57,217,138,0.30);
+      background: rgba(57,217,138,0.10);
+      color: var(--text);
+    }
+
+    .tag.bad {
+      border-color: rgba(255,107,107,0.30);
+      background: rgba(255,107,107,0.10);
+      color: var(--text);
+    }
+
+    .qtitle {
+      font-weight: 900;
+      letter-spacing: -0.01em;
+      position: relative;
+      z-index: 1;
+      line-height: 1.2;
+    }
+
+    .qmeta {
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 0.90rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .btnrow {
+      margin-top: auto;
+      display: flex;
+      gap: 10px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 0.95rem;
+      font-weight: 900;
+      cursor: pointer;
+      background: rgba(79,124,255,0.18);
+      color: var(--text);
+      transition: transform .15s, filter .15s, background .15s, box-shadow .15s;
+      user-select: none;
+    }
+
+    .btn:hover { transform: translateY(-1px); filter: brightness(1.07); }
+
+    .btn.practice {
+      background: rgba(79,124,255,0.28);
+      border-color: rgba(79,124,255,0.35);
+    }
+
+    .btn.tutor {
+      background: rgba(57,217,138,0.12);
+      border-color: rgba(57,217,138,0.22);
+      opacity: 0.85;
+    }
+
+    .btn.tutor:hover { filter: brightness(1.10); }
+
+    .status {
+      margin-top: 16px;
+      color: var(--muted);
+      font-weight: 750;
+      text-align: center;
+    }
+
+    .error {
+      background: rgba(255,107,107,0.14);
+      border: 1px solid rgba(255,107,107,0.22);
+      color: rgba(230,234,240,0.95);
+      padding: 14px;
+      border-radius: 14px;
+      margin-top: 14px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .pop { animation: popIn 220ms cubic-bezier(.2,.9,.2,1) both; }
+    @keyframes popIn {
+      from { opacity: 0; transform: translateY(8px) scale(0.99); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* Small pagination */
+    .pager {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      align-items: center;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
+    .pbtn {
+      padding: 10px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(18,24,36,0.8);
+      color: var(--text);
+      font-weight: 900;
+      cursor: pointer;
+      transition: transform .15s, filter .15s;
+    }
+
+    .pbtn:hover { transform: translateY(-1px); filter: brightness(1.07); }
+
+    .pbtn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  </style>
+</head>
+<body>
+
+  <div class="waves" aria-hidden="true">
+    <svg viewBox="0 0 1440 320" preserveAspectRatio="none">
+      <path class="wave1" fill="rgba(79,124,255,0.20)" d="M0,224L48,229.3C96,235,192,245,288,229.3C384,213,480,171,576,154.7C672,139,768,149,864,176C960,203,1056,245,1152,250.7C1248,256,1344,224,1392,208L1440,192L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path>
+      <path class="wave2" fill="rgba(57,217,138,0.10)" d="M0,256L60,229.3C120,203,240,149,360,138.7C480,128,600,160,720,170.7C840,181,960,171,1080,186.7C1200,203,1320,245,1380,266.7L1440,288L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z"></path>
+    </svg>
+  </div>
+
+  <!-- NAV -->
+  <div class="nav" id="nav">
+    <h2 class="nav-title">⚛ Atom Bowl</h2>
+    <a href="index.html"><span class="icon">🏠</span> Home</a>
+    <a href="#"><span class="icon">✨</span> Generate</a>
+    <a href="practice_home.html"><span class="icon">⚡</span> Practice</a>
+    <a href="question_bank.html"><span class="icon">📚</span> Question Bank</a>
+    <a href="#"><span class="icon">⚙️</span> Settings</a>
+  </div>
+
+  <div class="overlay" id="overlay"></div>
+  <div class="hamburger" id="hamburger">☰</div>
+
+  <div class="main">
+    <div class="header">
+      <div>
+        <h1 class="title">Question Bank</h1>
+        <div class="subtitle">Browse everything in <b>questions.json</b>. Hit <b>Practice</b> to open it in the engine.</div>
+      </div>
+
+      <div class="controls">
+        <input id="search" class="input" placeholder="Search (set, round, category, answer...)" />
+
+        <select id="level" class="select">
+          <option value="ANY">Level: Any</option>
+          <option value="MS">MS</option>
+          <option value="HS">HS</option>
+        </select>
+
+        <select id="category" class="select">
+          <option value="ANY">Category: Any</option>
+          <option value="EARTH SCIENCE">EARTH SCIENCE</option>
+          <option value="MATH">MATH</option>
+          <option value="MATHEMATICS">MATHEMATICS</option>
+          <option value="ASTRONOMY">ASTRONOMY</option>
+          <option value="EARTH AND SPACE">EARTH AND SPACE</option>
+          <option value="EARTH AND SPACE SCIENCE">EARTH AND SPACE SCIENCE</option>
+          <option value="BIOLOGY">BIOLOGY</option>
+          <option value="LIFE SCIENCE">LIFE SCIENCE</option>
+          <option value="GENERAL SCIENCE">GENERAL SCIENCE</option>
+          <option value="CHEMISTRY">CHEMISTRY</option>
+          <option value="PHYSICS">PHYSICS</option>
+          <option value="PHYSICAL SCIENCE">PHYSICAL SCIENCE</option>
+          <option value="ENERGY">ENERGY</option>
+        </select>
+
+        <select id="bonus" class="select">
+          <option value="ANY">TU/Bonus: Any</option>
+          <option value="false">Toss-up</option>
+          <option value="true">Bonus</option>
+        </select>
+
+        <div class="pill"><small>Showing</small> <span id="count">0</span></div>
+      </div>
+    </div>
+
+    <div id="grid" class="grid"></div>
+
+    <div class="pager">
+      <button class="pbtn" id="prev">← Prev</button>
+      <div class="pill"><small>Page</small> <span id="page">1</span>/<span id="pages">1</span></div>
+      <button class="pbtn" id="next">Next →</button>
+    </div>
+
+    <div id="status" class="status"></div>
+    <div id="err" class="error" style="display:none"></div>
+  </div>
+
+  <script>
+    // NAV
+    const nav = document.getElementById('nav');
+    const overlay = document.getElementById('overlay');
+    const hamburger = document.getElementById('hamburger');
+    function toggleNav() {
+      const isOpen = nav.classList.toggle('open');
+      overlay.classList.toggle('show');
+      hamburger.classList.toggle('open');
+      hamburger.textContent = isOpen ? '✕' : '☰';
+    }
+    hamburger.addEventListener('click', toggleNav);
+    overlay.addEventListener('click', toggleNav);
+
+    const grid = document.getElementById('grid');
+    const statusEl = document.getElementById('status');
+    const errEl = document.getElementById('err');
+    const countEl = document.getElementById('count');
+    const searchEl = document.getElementById('search');
+    const levelEl = document.getElementById('level');
+    const categoryEl = document.getElementById('category');
+    const bonusEl = document.getElementById('bonus');
+
+    const prevBtn = document.getElementById('prev');
+    const nextBtn = document.getElementById('next');
+    const pageEl = document.getElementById('page');
+    const pagesEl = document.getElementById('pages');
+
+    let bank = [];
+    let filtered = [];
+    let page = 1;
+    const PAGE_SIZE = 100; // keeps it fast; still feels like infinite scroll because pages are huge
+
+    function norm(s) { return String(s || '').trim(); }
+
+    function showErr(msg) {
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+    }
+
+    function hideErr() {
+      errEl.style.display = 'none';
+      errEl.textContent = '';
+    }
+
+    async function loadBank() {
+      const res = await fetch('./questions.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error('questions.json not found in repo root');
+      const data = await res.json();
+      return Array.isArray(data) ? data : (data.questions || []);
+    }
+
+    function matches(q, search, level, category, bonus) {
+      if (level !== 'ANY' && q.level !== level) return false;
+      if (category !== 'ANY' && norm(q.category) !== category) return false;
+      if (bonus !== 'ANY' && String(!!q.bonus) !== String(bonus)) return false;
+
+      if (!search) return true;
+      const s = search.toLowerCase();
+      const hay = [
+        q.set_name,
+        q.round_name,
+        q.category,
+        q.type,
+        q.parsed_answer,
+        q.question_text,
+        q.answer_text,
+        q.page,
+        q.num
+      ].map(v => String(v || '')).join(' | ').toLowerCase();
+      return hay.includes(s);
+    }
+
+    function apply() {
+      const search = norm(searchEl.value);
+      const level = levelEl.value;
+      const category = categoryEl.value;
+      const bonus = bonusEl.value;
+
+      filtered = bank.filter(q => matches(q, search, level, category, bonus));
+      page = 1;
+      render();
+    }
+
+    function tag(text, cls) {
+      return `<span class="tag ${cls || ''}">${text}</span>`;
+    }
+
+    function render() {
+      hideErr();
+
+      const total = filtered.length;
+      countEl.textContent = String(total);
+
+      const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      page = Math.max(1, Math.min(totalPages, page));
+      pageEl.textContent = String(page);
+      pagesEl.textContent = String(totalPages);
+
+      prevBtn.disabled = page <= 1;
+      nextBtn.disabled = page >= totalPages;
+
+      const start = (page - 1) * PAGE_SIZE;
+      const slice = filtered.slice(start, start + PAGE_SIZE);
+
+      grid.innerHTML = slice.map((q, i) => {
+        const isBonus = !!q.bonus;
+        const lvl = q.level || '—';
+        const cat = norm(q.category) || '—';
+        const type = q.type || '—';
+
+        const id = `${start + i}`; // stable for this filtered run
+
+        return `
+          <div class="tile pop">
+            <div class="tagrow">
+              ${tag(lvl, 'accent')}
+              ${tag(cat)}
+              ${tag(isBonus ? 'BONUS' : 'TOSS-UP', isBonus ? 'bad' : 'good')}
+              ${tag(type)}
+            </div>
+
+            <div class="qtitle">${escapeHtml(q.set_name || 'Set')} • ${escapeHtml(q.round_name || 'Round')} • #${escapeHtml(q.num)}</div>
+            <div class="qmeta">Answer: <b>${escapeHtml(q.parsed_answer || '—')}</b></div>
+
+            <div class="btnrow">
+              <button class="btn practice" data-action="practice" data-idx="${start + i}">⚡ Practice</button>
+              <button class="btn tutor" data-action="tutor" data-idx="${start + i}">🤖 Tutor</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      statusEl.textContent = total
+        ? `Showing ${start + 1}–${Math.min(start + PAGE_SIZE, total)} of ${total}.`
+        : 'No results. Try changing filters.';
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    // Click handling
+    grid.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+
+      const idx = parseInt(btn.dataset.idx, 10);
+      const q = filtered[idx];
+      if (!q) return;
+
+      if (btn.dataset.action === 'practice') {
+        // Send selected question to the engine
+        localStorage.setItem('atom_single_question', JSON.stringify(q));
+        localStorage.setItem('atom_practice_config', JSON.stringify({
+          mode: 'single',
+          count: 1
+        }));
+        window.location.href = 'practice.html';
+      }
+
+      if (btn.dataset.action === 'tutor') {
+        // Placeholder: wired later to Gemini
+        alert('Tutor is coming next. For now: use Practice.');
+      }
+    });
+
+    // Controls
+    const debounced = (() => {
+      let t = null;
+      return (fn) => {
+        clearTimeout(t);
+        t = setTimeout(fn, 160);
+      };
+    })();
+
+    searchEl.addEventListener('input', () => debounced(apply));
+    levelEl.addEventListener('change', apply);
+    categoryEl.addEventListener('change', apply);
+    bonusEl.addEventListener('change', apply);
+
+    prevBtn.addEventListener('click', () => { page -= 1; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+    nextBtn.addEventListener('click', () => { page += 1; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+
+    (async () => {
+      statusEl.textContent = 'Loading questions.json…';
+      try {
+        bank = await loadBank();
+      } catch (e) {
+        showErr(String(e.message || e));
+        statusEl.textContent = '';
+        return;
+      }
+
+      // Basic sanity
+      if (!Array.isArray(bank) || bank.length === 0) {
+        showErr('questions.json loaded but contains no questions.');
+        statusEl.textContent = '';
+        return;
+      }
+
+      statusEl.textContent = `Loaded ${bank.length} questions.`;
+      filtered = bank.slice();
+      render();
+    })();
+  </script>
+</body>
+</html>
