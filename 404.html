@@ -226,31 +226,23 @@
   </div>
 
   <script>
-    // hamburger
     const nav = document.getElementById('nav');
     const overlay = document.getElementById('overlay');
-    const ham = document.getElementById('hamburger');
+    const hamburger = document.getElementById('hamburger');
 
-    ham.onclick = () => {
-      nav.classList.toggle('open');
+    function toggleNav() {
+      const isOpen = nav.classList.toggle('open');
       overlay.classList.toggle('show');
-    };
-    overlay.onclick = () => {
-      nav.classList.remove('open');
-      overlay.classList.remove('show');
-    };
+      hamburger.classList.toggle('open');
+      hamburger.textContent = isOpen ? '✕' : '☰';
+    }
 
-    // redirect countdown
-    let t = 5;
-    const el = document.getElementById('sec');
-    const timer = setInterval(() => {
-      t--;
-      el.textContent = t;
-      if (t <= 0) {
-        clearInterval(timer);
-        window.location.href = 'index.html';
-      }
-    }, 1000);
+    hamburger.onclick = toggleNav;
+    overlay.onclick = toggleNav;
+
+    function go(page) {
+      window.location.href = page;
+    }
   </script>
 </body>
 </html>
