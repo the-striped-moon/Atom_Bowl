@@ -188,14 +188,24 @@
 </head>
 <body>
 
-  <div class="hamburger" id="hamburger">☰</div>
+  <!-- NAV -->
   <div class="nav" id="nav">
-    <h2>⚛ Atom Bowl</h2>
-    <a href="index.html">Home</a>
-    <a href="practice_home.html">Practice</a>
-    <a href="question_bank.html">Question Bank</a>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
+      <h2 class="nav-title">⚛ Atom Bowl</h2>
+      
+    </div>
+
+    <a href="index.html"><span class="icon">🏠</span> Home</a>
+    <a href="generate.html"><span class="icon">✨</span> Generate</a>
+    <a href="practice_home.html"><span class="icon">⚡</span> Practice</a>
+    <a href="question_bank.html"><span class="icon">📚</span> Question Bank</a>
+    <a href="settings.html"><span class="icon">⚙️</span> Settings</a>
   </div>
+
   <div class="overlay" id="overlay"></div>
+
+  <div class="hamburger" id="hamburger">☰</div>
+
 
   <div class="container">
     <div class="card">
@@ -204,9 +214,9 @@
       <div class="countdown">Redirecting home in <span id="sec">5</span>…</div>
 
       <div class="actions">
-        <a class="btn primary" href="index.html">← Home</a>
-        <a class="btn" href="practice_home.html">← Practice</a>
-        <a class="btn" href="question_bank.html">← Question Bank</a>
+        <a class="btn primary" href="index.html">Home</a>
+        <a class="btn" href="practice_home.html">Practice</a>
+        <a class="btn" href="question_bank.html">Question Bank</a>
         <a class="btn danger" target="_blank"
            href="https://github.com/atom-bowl/Atom_Bowl/issues/new?title=Broken%20Link&body=Broken%20URL:%20">
           🐛 Report Broken Link
