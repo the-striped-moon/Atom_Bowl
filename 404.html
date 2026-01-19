@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <title>404 | Atom Bowl</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="apple-touch-icon" href="favicon.png">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -48,62 +50,73 @@
       to   { transform: translate(2%, 1%) scale(1.04); }
     }
 
-    /* NAV */
-    .hamburger {
-      position: fixed;
-      top: 18px;
-      left: 18px;
-      font-size: 28px;
-      cursor: pointer;
-      z-index: 1001;
-    }
-
+    /* ===== NAV ===== */
     .nav {
       position: fixed;
-      inset: 0 auto 0 0;
-      width: 260px;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      width: 280px;
       background: var(--panel);
-      padding: 24px;
+      padding: 24px 24px 48px;
       transform: translateX(-100%);
       transition: transform 0.35s ease;
       z-index: 1000;
     }
 
-    .nav.open { transform: translateX(0); }
+    .nav.open {
+      transform: translateX(0);
+    }
 
-    .nav h2 {
+    .nav-title {
       margin-top: 0;
-      margin-bottom: 20px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      font-size: 1.4rem;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
 
     .nav a {
-      display: block;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin: 12px 0;
       padding: 12px 14px;
       border-radius: 12px;
-      text-decoration: none;
       color: var(--text);
-      margin-bottom: 10px;
-      font-weight: 600;
+      text-decoration: none;
+      font-weight: 500;
+      transition: background 0.25s, color 0.25s, transform 0.15s;
     }
 
     .nav a:hover {
-      background: rgba(79,124,255,0.15);
+      background: rgba(79, 124, 255, 0.15);
       color: var(--accent);
+      transform: translateX(4px);
     }
 
-    .overlay {
+    .icon {
+      font-size: 1.2rem;
+      width: 22px;
+      text-align: center;
+    }
+
+    .hamburger {
       position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.55);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.35s ease;
-      z-index: 900;
+      top: 20px;
+      left: 20px;
+      font-size: 28px;
+      cursor: pointer;
+      z-index: 1100;
+      user-select: none;
+      transition: left 0.35s ease;
     }
 
-    .overlay.show {
-      opacity: 1;
-      pointer-events: auto;
+    .hamburger.open {
+      left: 300px;
     }
 
     /* MAIN */
@@ -156,15 +169,18 @@
     }
 
     .btn {
-      padding: 14px 18px;
-      border-radius: 14px;
+      padding: 10px 14px;          /* makes them shorter */
+      border-radius: 10px;         /* less pill-like */
+      font-weight: 600;            /* slightly lighter */
+      font-size: 0.95rem;          /* smaller text */
+      line-height: 1.1;            /* tighter vertical height */
       text-decoration: none;
-      font-weight: 700;
       color: white;
       background: rgba(79,124,255,0.2);
       border: 1px solid rgba(79,124,255,0.4);
       transition: transform .15s, box-shadow .15s, background .15s;
     }
+
 
     .btn.primary {
       background: var(--accent);
@@ -219,7 +235,7 @@
         <a class="btn" href="question_bank.html">Question Bank</a>
         <a class="btn danger" target="_blank"
            href="https://github.com/atom-bowl/Atom_Bowl/issues/new?title=Broken%20Link&body=Broken%20URL:%20">
-          🐛 Report Broken Link
+          Broken Link
         </a>
       </div>
     </div>
