@@ -477,18 +477,32 @@
     function safeParseJSON(s, fallback) {
       try { return JSON.parse(s); } catch { return fallback; }
     }
+  
 
+    const cfgPractice = safeParseJSON(localStorage.getItem('atom_practice_config'), {});
+    const cfgLegacy   = safeParseJSON(localStorage.getItem('atom_run'), {}); // legacy / tiles
+    
     const runCfg = {
       ...DEFAULT_RUN,
-      ...safeParseJSON(localStorage.getItem('atom_practice_config'), {})
+      ...cfgLegacy,
+      ...cfgPractice
     };
-    if (!Number.isFinite(runCfg.count) || runCfg.count < 2) {
+
+    };
+    if (!Number.isFinite(runCfg.count)) {
       runCfg.count = DEFAULT_RUN.count;
     }
-
+    
+    if (runCfg.count < 1) {
+      runCfg.count = 1;
+    }
+    
     runCfg.qaType = runCfg.qaType || runCfg.qtype || 'ANY';
-    runCfg.seconds = runCfg.seconds || runCfg.time || DEFAULT_RUN.seconds;
-    runCfg.count = runCfg.count || DEFAULT_RUN.count;
+    runCfg.mode = runCfg.mode || DEFAULT_RUN.mode;
+    runCfg.seconds = Number.isFinite(runCfg.seconds)
+      ? runCfg.seconds
+      : (Number.isFinite(runCfg.time) ? runCfg.time : DEFAULT_RUN.seconds);
+
 
     document.getElementById('mode').textContent = runCfg.mode;
 
@@ -681,7 +695,6 @@
         }
       }
 
-      shuffle(result);
       const n = Math.max(1, parseInt(runCfg.count, 10) || 25);
       return result.slice(0, Math.min(n, result.length));
     }
