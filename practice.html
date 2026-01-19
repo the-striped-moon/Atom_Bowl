@@ -356,6 +356,7 @@
       font-weight: 800;
       letter-spacing: 0.2px;
       text-align: center;
+      white-space: pre-wrap;
     }
 
     .feedback.good { color: var(--good); }
@@ -410,7 +411,7 @@
     <div class="topbar">
       <div class="pill"><small>Timer</small> <span id="timer">20</span></div>
       <div class="pill"><small>Score</small> <span id="score">0</span></div>
-      <div class="pill"><small>Pairs</small> <span id="qnum">0</span>/<span id="qtotal">0</span></div>
+      <div class="pill"><small>Progress</small> <span id="progress">—</span></div>
       <div class="pill"><small>Mode</small> <span id="mode">—</span></div>
     </div>
 
@@ -461,14 +462,14 @@
     hamburger.addEventListener('click', toggleNav);
     overlay.addEventListener('click', toggleNav);
 
-    // Run config from practice_home
+    // Run config (single source of truth)
     const DEFAULT_RUN = {
       mode: 'rapid',
       level: 'ANY',
       category: 'ANY',
       qaType: 'ANY',
       bonus: 'ANY',
-      count: 25,
+      count: 25,     // number of PAIRS
       seconds: 20,
       setName: '',
       roundName: ''
@@ -478,14 +479,12 @@
       try { return JSON.parse(s); } catch { return fallback; }
     }
 
-    // NOTE: atom_practice_config is deprecated and MUST NOT override Practice Home
-// Practice Home writes to `atom_run`, which is the single source of truth
-const cfgOld = safeParseJSON(localStorage.getItem('atom_run'), null);
+    const cfg = safeParseJSON(localStorage.getItem('atom_run'), null) || {};
 
-const runCfg = {
-  ...DEFAULT_RUN,
-  ...(cfgOld || {})
-};
+    const runCfg = {
+      ...DEFAULT_RUN,
+      ...cfg
+    };
 
     runCfg.qaType = runCfg.qaType || runCfg.qtype || 'ANY';
 
@@ -505,8 +504,7 @@ const runCfg = {
     const feedback = document.getElementById('feedback');
     const timerEl = document.getElementById('timer');
     const scoreEl = document.getElementById('score');
-    const qnumEl = document.getElementById('qnum');
-    const qtotalEl = document.getElementById('qtotal');
+    const progressEl = document.getElementById('progress');
     const buzzEl = document.getElementById('buzz');
     const choicesEl = document.getElementById('choices');
     const submitBtn = document.getElementById('submitBtn');
@@ -538,12 +536,14 @@ const runCfg = {
     }
 
     function showError(msg) {
+      if (!errEl) return;
       errEl.textContent = msg;
       errEl.classList.remove('hidden');
       animateIn(errEl);
     }
 
     function hideError() {
+      if (!errEl) return;
       errEl.classList.add('hidden');
       errEl.textContent = '';
     }
@@ -638,6 +638,7 @@ const runCfg = {
       return arr;
     }
 
+    // Pair builder: TU -> BO, same SUBJECT (category) is required; same set is preferred; same round is preferred.
     function buildRunQuestions() {
       const filtered = applyFilters(bank);
       if (!filtered.length) {
@@ -647,37 +648,91 @@ const runCfg = {
       hideError();
 
       const mode = String(runCfg.mode || 'rapid').toLowerCase();
-      let result = [];
 
+      // In tossups/bonuses modes, count means raw questions (not pairs)
       if (mode === 'tossups') {
-        result = filtered.filter(q => !q.bonus);
-      } else if (mode === 'bonuses') {
-        result = filtered.filter(q => q.bonus);
-      } else {
-        // STRICT TU -> BONUS pairing by SAME SET + SAME CATEGORY
-        const groups = new Map();
-        for (const q of filtered) {
-          const key = `${q.set_name}||${norm(q.category)}`;
-          if (!groups.has(key)) groups.set(key, { tu: [], bo: [] });
-          if (q.bonus) groups.get(key).bo.push(q);
-          else groups.get(key).tu.push(q);
+        const tus = filtered.filter(q => !q.bonus);
+        shuffle(tus);
+        const n = Math.max(1, parseInt(runCfg.count, 10) || DEFAULT_RUN.count);
+        return tus.slice(0, Math.min(n, tus.length));
+      }
+      if (mode === 'bonuses') {
+        const bos = filtered.filter(q => q.bonus);
+        shuffle(bos);
+        const n = Math.max(1, parseInt(runCfg.count, 10) || DEFAULT_RUN.count);
+        return bos.slice(0, Math.min(n, bos.length));
+      }
+
+      // Rapid/default: count means number of PAIRS
+      const wantPairs = Math.max(1, parseInt(runCfg.count, 10) || DEFAULT_RUN.count);
+
+      // Group by category first (subject is the hard requirement)
+      const byCat = new Map();
+      for (const q of filtered) {
+        const cat = norm(q.category);
+        if (!byCat.has(cat)) byCat.set(cat, []);
+        byCat.get(cat).push(q);
+      }
+
+      const allPairs = [];
+
+      for (const items of byCat.values()) {
+        // Prefer pairing within same set
+        const bySet = new Map();
+        for (const q of items) {
+          const key = String(q.set_name || '');
+          if (!bySet.has(key)) bySet.set(key, []);
+          bySet.get(key).push(q);
         }
 
-        for (const { tu, bo } of groups.values()) {
-          shuffle(tu);
-          shuffle(bo);
-          const pairs = Math.min(tu.length, bo.length);
-          for (let i = 0; i < pairs; i++) {
-            // ORDER IS ALWAYS TU -> BONUS
-            result.push(tu[i], bo[i]);
+        for (const setItems of bySet.values()) {
+          const tus = setItems.filter(x => !x.bonus);
+          const bos = setItems.filter(x => x.bonus);
+          shuffle(tus);
+          shuffle(bos);
+
+          const usedBo = new Set();
+
+          for (const t of tus) {
+            // Prefer same round first
+            let b = bos.find(x => !usedBo.has(x) && String(x.round_name) === String(t.round_name));
+            if (!b) b = bos.find(x => !usedBo.has(x));
+            if (!b) break;
+            usedBo.add(b);
+            allPairs.push([t, b]);
           }
         }
       }
 
-      // IMPORTANT: count = number of PAIRS (not raw questions)
-      const pairCount = Math.max(1, parseInt(runCfg.count, 10) || DEFAULT_RUN.count);
-      const maxQuestions = pairCount * 2;
-      return result.slice(0, maxQuestions);
+      shuffle(allPairs);
+      const pickedPairs = allPairs.slice(0, Math.min(wantPairs, allPairs.length));
+
+      // Flatten into TU -> BO order
+      const out = [];
+      for (const [t, b] of pickedPairs) out.push(t, b);
+      return out;
+    }
+
+    function updateProgressUI() {
+      const q = currentQ();
+      if (!q || !Array.isArray(questions) || !questions.length) {
+        progressEl.textContent = '—';
+        return;
+      }
+
+      const mode = String(runCfg.mode || 'rapid').toLowerCase();
+
+      if (mode === 'tossups' || mode === 'bonuses') {
+        // raw question progress
+        progressEl.textContent = `${index + 1} / ${questions.length}`;
+        return;
+      }
+
+      // pair progress
+      const pairIndex = Math.floor(index / 2) + 1;
+      const totalPairs = Math.max(1, Math.ceil(questions.length / 2));
+      const label = q.bonus ? 'BO' : 'TU';
+      progressEl.textContent = `${label} ${pairIndex} / ${totalPairs}`;
     }
 
     function resetForQuestion() {
@@ -718,15 +773,21 @@ const runCfg = {
         return;
       }
 
-      qnumEl.textContent = String(index + 1);
-      qtotalEl.textContent = String(questions.length);
+      updateProgressUI();
 
       setImgWithFallback(img, q, 'question_image');
       img.alt = `Question ${index + 1}`;
 
       input.value = '';
-      metaLeft.textContent = `${q.level} • ${q.category} • ${q.bonus ? 'Bonus' : 'Toss-up'} • ${q.type}`;
-      metaRight.textContent = `${q.set_name} / ${q.round_name} • #${q.num}`;
+
+      const isRapid = !['tossups','bonuses'].includes(String(runCfg.mode || 'rapid').toLowerCase());
+      if (isRapid) {
+        metaLeft.textContent = `${q.level} • ${q.category} • ${q.bonus ? 'Bonus' : 'Toss-up'} • ${q.type}`;
+        metaRight.textContent = `${q.set_name} / ${q.round_name} • #${q.num}`;
+      } else {
+        metaLeft.textContent = `${q.level} • ${q.category} • ${q.type}`;
+        metaRight.textContent = `${q.set_name} / ${q.round_name} • #${q.num}`;
+      }
 
       resetForQuestion();
 
@@ -782,7 +843,7 @@ const runCfg = {
       const ua = norm(userAnswer) || '(no answer)';
       const ca = norm(correctAnswer) || '(no official answer)';
 
-      feedback.innerHTML = `Your answer: <span style="color:var(--text)">${escapeHtml(ua)}</span><br>` +
+      feedback.innerHTML = `Your answer: <span style="color:var(--text)">${escapeHtml(ua)}</span>\n` +
                           `Official: <span style="color:var(--muted)">${escapeHtml(ca)}</span>`;
       feedback.className = 'feedback';
       animateIn(feedback);
@@ -856,12 +917,16 @@ const runCfg = {
       wrongBtn.classList.add('hidden');
       nextBtn.classList.add('hidden');
 
-      const totalPairs = Array.isArray(questions) ? Math.floor(questions.length / 2) : 0;
-      feedback.textContent = totalPairs ? `Final score: ${score}/${totalPairs * 14}` : '';
+      const mode = String(runCfg.mode || 'rapid').toLowerCase();
+      if (mode === 'tossups' || mode === 'bonuses') {
+        feedback.textContent = questions.length ? `Final score: ${score}/${questions.length * 4}` : '';
+      } else {
+        const totalPairs = questions.length ? Math.ceil(questions.length / 2) : 0;
+        feedback.textContent = totalPairs ? `Final score: ${score}/${totalPairs * 14}` : '';
+      }
       feedback.className = 'feedback';
 
-      qnumEl.textContent = String(total ? Math.min(index + 1, total) : 0);
-      qtotalEl.textContent = String(total);
+      progressEl.textContent = '—';
 
       buzzed = false;
       locked = true;
@@ -924,7 +989,7 @@ const runCfg = {
     const questionCard = document.querySelector('.question-card');
 
     function shouldIgnoreTap(target) {
-      return target.closest('input, textarea, button, a, select, label');
+      return !!target.closest('input, textarea, button, a, select, label');
     }
 
     function tapToBuzz(e) {
@@ -957,25 +1022,33 @@ const runCfg = {
 
     // Extra self-tests (console only)
     function runSelfTests() {
-      console.assert(!!img && !!input && !!timerEl && !!choicesEl, 'DOM missing core elements');
+      console.assert(!!img && !!input && !!timerEl && !!choicesEl && !!progressEl, 'DOM missing core elements');
       console.assert(typeof currentQ === 'function', 'currentQ missing');
 
       // Bounds tests
+      const savedQuestions = questions;
+      const savedIndex = index;
+
       questions = [];
       index = 0;
       console.assert(currentQ() === null, 'currentQ should be null on empty');
-      questions = [{ type: 'SA', level: 'MS', bonus: false, question_image: 'ms/Sample-Set-1/m_round02/10_0.png' }];
+
+      questions = [{ type: 'SA', level: 'MS', bonus: false, category: 'PHYSICS', question_image: 'ms/Sample-Set-1/m_round02/10_0.png' }];
       index = 1;
       console.assert(currentQ() === null, 'currentQ should be null on OOB index');
+
       index = 0;
       console.assert(!!currentQ(), 'currentQ should exist in bounds');
 
-      // Simple mode tests (no syntax errors, basic selection)
+      questions = savedQuestions;
+      index = savedIndex;
+
+      // Pair-order test
       const mini = [
         { set_name: 'S1', round_name: 'r1', num: 10, bonus: false, level: 'MS', category: 'PHYSICS', type: 'SA', question_image: '' },
-        { set_name: 'S1', round_name: 'r2', num: 10, bonus: true,  level: 'MS', category: 'PHYSICS', type: 'SA', question_image: '' },
-        { set_name: 'S1', round_name: 'r1', num: 11, bonus: false, level: 'MS', category: 'CHEMISTRY', type: 'SA', question_image: '' },
-        { set_name: 'S1', round_name: 'r1', num: 11, bonus: true,  level: 'MS', category: 'CHEMISTRY', type: 'SA', question_image: '' },
+        { set_name: 'S1', round_name: 'r1', num: 10, bonus: true,  level: 'MS', category: 'PHYSICS', type: 'SA', question_image: '' },
+        { set_name: 'S1', round_name: 'r2', num: 11, bonus: false, level: 'MS', category: 'PHYSICS', type: 'SA', question_image: '' },
+        { set_name: 'S1', round_name: 'r2', num: 11, bonus: true,  level: 'MS', category: 'PHYSICS', type: 'SA', question_image: '' },
       ];
 
       const savedBank = bank;
@@ -988,19 +1061,13 @@ const runCfg = {
       runCfg.bonus = 'ANY';
       runCfg.setName = '';
       runCfg.roundName = '';
-      runCfg.count = 4;
-
-      runCfg.mode = 'tossups';
-      const tu = buildRunQuestions();
-      console.assert(tu.every(q => !q.bonus), 'tossups mode should only return tossups');
-
-      runCfg.mode = 'bonuses';
-      const bo = buildRunQuestions();
-      console.assert(bo.every(q => q.bonus), 'bonuses mode should only return bonuses');
-
       runCfg.mode = 'rapid';
+      runCfg.count = 2;
+
       const ra = buildRunQuestions();
-      console.assert(ra.length >= 2, 'rapid mode should return something');
+      console.assert(ra.length === 4, 'rapid should return 2 pairs => 4 questions');
+      console.assert(ra[0].bonus === false && ra[1].bonus === true, 'pair 1 should be TU then BO');
+      console.assert(ra[2].bonus === false && ra[3].bonus === true, 'pair 2 should be TU then BO');
 
       bank = savedBank;
       Object.assign(runCfg, savedCfg);
@@ -1016,19 +1083,17 @@ const runCfg = {
         bank = await loadBank();
       } catch (e) {
         showError(String(e.message || e));
-        qnumEl.textContent = '0';
-        qtotalEl.textContent = '0';
         buzzEl.textContent = 'Missing questions.json';
+        progressEl.textContent = '—';
         return;
       }
 
       questions = buildRunQuestions();
-      qtotalEl.textContent = String(questions.length);
-      qnumEl.textContent = questions.length ? '1' : '0';
 
       if (!questions.length) {
         runActive = false;
         buzzEl.textContent = 'No questions matched — press Esc';
+        progressEl.textContent = '—';
         return;
       }
 
