@@ -937,7 +937,14 @@
 
     // Events
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Space') e.preventDefault();
+      const tag = e.target?.tagName?.toLowerCase();
+      const isTyping =
+        tag === 'input' ||
+        tag === 'textarea' ||
+        e.target?.isContentEditable;
+      
+      if (e.code === 'Space' && !isTyping) e.preventDefault();
+
 
       if (e.key === 'Escape') {
         window.location.href = 'practice_home.html';
@@ -954,7 +961,7 @@
         return;
       }
 
-      if (e.code === 'Space' && !buzzed && !locked) {
+      if (e.code === 'Space' && !buzzed && !locked && !isTyping) {
         allowAnswerUI();
         return;
       }
@@ -963,10 +970,11 @@
         if (q.type === 'SA') submitSA();
       }
 
-      if (buzzed && !locked) {
+      if (buzzed && !locked && q.type === 'MC') {
         const k = e.key.toUpperCase();
         if (q.type === 'MC' && ['W','X','Y','Z'].includes(k)) pickMC(k);
       }
+    });
 
       if (e.key.toUpperCase() === 'N' && locked) nextQuestion();
     }, { passive: false });
@@ -975,6 +983,23 @@
     rightBtn.addEventListener('click', () => applyGrade(true));
     wrongBtn.addEventListener('click', () => applyGrade(false));
     nextBtn.addEventListener('click', nextQuestion);
+    // Mobile / touch buzz support
+    const questionCard = document.querySelector('.question-card');
+    
+    function shouldIgnoreTap(target) {
+      return target.closest('input, textarea, button, a, select, label');
+    }
+    
+    function tapToBuzz(e) {
+      if (shouldIgnoreTap(e.target)) return;
+      if (!runActive || buzzed || locked || awaitingGrade) return;
+      
+      allowAnswerUI();
+    }
+    
+    if (questionCard) {
+      questionCard.addEventListener('pointerdown', tapToBuzz);
+    }
 
     choicesEl.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-letter]');
