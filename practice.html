@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Atom Bowl — Problem</title>
+  <title>Atom Bowl — Practice Engine</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="apple-touch-icon" href="favicon.png">
@@ -410,7 +410,7 @@
     <div class="topbar">
       <div class="pill"><small>Timer</small> <span id="timer">20</span></div>
       <div class="pill"><small>Score</small> <span id="score">0</span></div>
-      <div class="pill"><small>Q</small> <span id="qnum">0</span>/<span id="qtotal">0</span></div>
+      <div class="pill"><small>Pairs</small> <span id="qnum">0</span>/<span id="qtotal">0</span></div>
       <div class="pill"><small>Mode</small> <span id="mode">—</span></div>
     </div>
 
@@ -654,43 +654,30 @@ const runCfg = {
       } else if (mode === 'bonuses') {
         result = filtered.filter(q => q.bonus);
       } else {
-        // Rapid/default: keep TU -> Bonus pairing within same set + same category (subject)
+        // STRICT TU -> BONUS pairing by SAME SET + SAME CATEGORY
         const groups = new Map();
         for (const q of filtered) {
           const key = `${q.set_name}||${norm(q.category)}`;
-          if (!groups.has(key)) groups.set(key, []);
-          groups.get(key).push(q);
+          if (!groups.has(key)) groups.set(key, { tu: [], bo: [] });
+          if (q.bonus) groups.get(key).bo.push(q);
+          else groups.get(key).tu.push(q);
         }
 
-        for (const items of groups.values()) {
-          const tossups = items.filter(q => !q.bonus);
-          const bonuses = items.filter(q => q.bonus);
-          shuffle(tossups);
-          shuffle(bonuses);
-
-          const used = new Set();
-          for (const t of tossups) {
-            const b = bonuses.find(x => !used.has(x));
-            if (!b) break;
-            used.add(b);
-            result.push(t, b);
-          }
-        }
-
-        // If pairing produced too few, fill remainder from filtered (prevents 2-question runs)
-        if (result.length < Math.max(1, parseInt(runCfg.count, 10) || 25)) {
-          const pool = filtered.slice();
-          shuffle(pool);
-          for (const q of pool) {
-            if (result.length >= Math.max(1, parseInt(runCfg.count, 10) || 25)) break;
-            result.push(q);
+        for (const { tu, bo } of groups.values()) {
+          shuffle(tu);
+          shuffle(bo);
+          const pairs = Math.min(tu.length, bo.length);
+          for (let i = 0; i < pairs; i++) {
+            // ORDER IS ALWAYS TU -> BONUS
+            result.push(tu[i], bo[i]);
           }
         }
       }
 
-      shuffle(result);
-      const n = Math.max(1, parseInt(runCfg.count, 10) || 25);
-      return result.slice(0, Math.min(n, result.length));
+      // IMPORTANT: count = number of PAIRS (not raw questions)
+      const pairCount = Math.max(1, parseInt(runCfg.count, 10) || DEFAULT_RUN.count);
+      const maxQuestions = pairCount * 2;
+      return result.slice(0, maxQuestions);
     }
 
     function resetForQuestion() {
@@ -869,8 +856,8 @@ const runCfg = {
       wrongBtn.classList.add('hidden');
       nextBtn.classList.add('hidden');
 
-      const total = Array.isArray(questions) ? questions.length : 0;
-      feedback.textContent = total ? `Final score: ${score}/${total}` : '';
+      const totalPairs = Array.isArray(questions) ? Math.floor(questions.length / 2) : 0;
+      feedback.textContent = totalPairs ? `Final score: ${score}/${totalPairs * 14}` : '';
       feedback.className = 'feedback';
 
       qnumEl.textContent = String(total ? Math.min(index + 1, total) : 0);
