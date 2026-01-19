@@ -480,12 +480,23 @@
 
     const cfgNew = safeParseJSON(localStorage.getItem('atom_practice_config'), null);
     const cfgOld = safeParseJSON(localStorage.getItem('atom_run'), null);
-    const runCfg = { ...DEFAULT_RUN, ...(cfgOld || {}), ...(cfgNew || {}) };
+
+    const runCfg = {
+      ...DEFAULT_RUN,
+      ...(cfgOld || {}),
+      ...(cfgNew || {})
+    };
 
     runCfg.qaType = runCfg.qaType || runCfg.qtype || 'ANY';
-    runCfg.seconds = runCfg.seconds || runCfg.time || DEFAULT_RUN.seconds;
-    runCfg.count = runCfg.count || DEFAULT_RUN.count;
 
+    runCfg.seconds = parseInt(runCfg.seconds ?? runCfg.time, 10);
+    if (!Number.isFinite(runCfg.seconds)) runCfg.seconds = DEFAULT_RUN.seconds;
+
+    runCfg.count = parseInt(runCfg.count, 10);
+    if (!Number.isFinite(runCfg.count)) runCfg.count = DEFAULT_RUN.count;
+    if (runCfg.count < 1) runCfg.count = 1;
+
+    runCfg.mode = runCfg.mode || DEFAULT_RUN.mode;
     document.getElementById('mode').textContent = runCfg.mode;
 
     // DOM
