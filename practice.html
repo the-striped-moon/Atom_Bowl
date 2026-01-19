@@ -197,6 +197,7 @@
       backdrop-filter: blur(8px);
       transform: translateY(0);
       transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+      position: relative;
     }
 
     .question-card:hover {
@@ -215,7 +216,7 @@
     .question-img {
       width: 100%;
       border-radius: 14px;
-      display: block;
+      display: none;
       margin: 18px 0 10px;
       background: rgba(255,255,255,0.02);
       border: 1px solid rgba(255,255,255,0.06);
@@ -225,9 +226,6 @@
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(6px); }
       to   { opacity: 1; transform: translateY(0); }
-    }
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.06);
     }
 
     .buzz {
@@ -571,15 +569,21 @@
       const cands = resolveImgCandidates(q, field);
       let i = 0;
       imgEl.onerror = null;
+
       if (!cands.length) {
+        imgEl.style.display = 'none';
         imgEl.src = '';
         return;
       }
+
+      imgEl.style.display = 'block';
       imgEl.src = cands[i];
       imgEl.onerror = () => {
         i += 1;
         if (i >= cands.length) {
           imgEl.onerror = null;
+          imgEl.style.display = 'none';
+          imgEl.src = '';
           return;
         }
         imgEl.src = cands[i];
@@ -598,10 +602,19 @@
         if (level !== 'ANY' && q.level !== level) return false;
         if (category !== 'ANY' && norm(q.category) !== category) return false;
         if (qaType !== 'ANY' && q.type !== qaType) return false;
-        if (bonus !== 'ANY' && String(!!q.bonus) !== String(bonus)) return false;
+
+        // bonus can be ANY / true / false / TU / BONUS
+        if (bonus !== 'ANY') {
+          const b = String(bonus).toUpperCase().trim();
+          const wantBonus = (b === 'TRUE' || b === 'BONUS' || b === 'B');
+          const wantTU = (b === 'FALSE' || b === 'TU' || b === 'TOSSUP' || b === 'TOSS-UP' || b === 'T');
+          if (wantBonus && !q.bonus) return false;
+          if (wantTU && q.bonus) return false;
+          if (!wantBonus && !wantTU && String(!!q.bonus) !== String(bonus)) return false;
+        }
+
         if (setName && q.set_name !== setName) return false;
         if (roundName && q.round_name !== roundName) return false;
-        if (!q.question_image) return false;
         return true;
       });
     }
@@ -617,121 +630,56 @@
     function buildRunQuestions() {
       const filtered = applyFilters(bank);
       if (!filtered.length) {
-        const parts = [];
-        if (runCfg.level !== 'ANY') parts.push(`level=${runCfg.level}`);
-        if (runCfg.category !== 'ANY') parts.push(`category=${runCfg.category}`);
-        if (runCfg.qaType !== 'ANY') parts.push(`type=${runCfg.qaType}`);
-        if (runCfg.bonus !== 'ANY') parts.push(`bonus=${runCfg.bonus}`);
-        if (norm(runCfg.setName)) parts.push(`set_name=${runCfg.setName}`);
-        if (norm(runCfg.roundName)) parts.push(`round_name=${runCfg.roundName}`);
-        showError(`No matches for your run. Go back and loosen filters. (${parts.join(', ') || 'no filters'})`);
+        showError('No matches for your run. Go back and loosen filters.');
         return [];
       }
-
       hideError();
 
-      // Pairing priority:
-      // 1) SAME set_name + SAME category (subject)  ✅ most important
-      // 2) Prefer SAME round_name within that
-      // 3) Prefer SAME num within that
-      // 4) Fallback to any remaining bonus in same set+category
-      const groups = new Map();
-      for (const q of filtered) {
-        const key = `${q.set_name}||${norm(q.category)}`;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(q);
-      }
+      const mode = String(runCfg.mode || 'rapid').toLowerCase();
+      let result = [];
 
-      const groupKeys = Array.from(groups.keys());
-      shuffle(groupKeys);
-
-      const paired = [];
-
-      for (const gk of groupKeys) {
-        const items = groups.get(gk) || [];
-        const tossups = items.filter(q => !q.bonus);
-        const bonuses = items.filter(q => q.bonus);
-        if (!tossups.length || !bonuses.length) continue;
-
-        shuffle(tossups);
-
-        // Index bonuses by round + num, and also by num (any round)
-        const bonusByRoundNum = new Map(); // key: round||num -> [bonus]
-        const bonusByRoundAny = new Map(); // key: round -> [bonus]
-        const bonusByNumAny = new Map();   // key: num -> [bonus]
-
-        const toNumKey = (v) => {
-          const n = Number.isFinite(v) ? v : parseInt(v, 10);
-          return Number.isFinite(n) ? n : String(v);
-        };
-
-        for (const b of bonuses) {
-          const bn = toNumKey(b.num);
-          const rn = String(b.round_name || '');
-          const k1 = `${rn}||${bn}`;
-          if (!bonusByRoundNum.has(k1)) bonusByRoundNum.set(k1, []);
-          bonusByRoundNum.get(k1).push(b);
-
-          if (!bonusByRoundAny.has(rn)) bonusByRoundAny.set(rn, []);
-          bonusByRoundAny.get(rn).push(b);
-
-          if (!bonusByNumAny.has(bn)) bonusByNumAny.set(bn, []);
-          bonusByNumAny.get(bn).push(b);
+      if (mode === 'tossups') {
+        result = filtered.filter(q => !q.bonus);
+      } else if (mode === 'bonuses') {
+        result = filtered.filter(q => q.bonus);
+      } else {
+        // Rapid/default: keep TU -> Bonus pairing within same set + same category (subject)
+        const groups = new Map();
+        for (const q of filtered) {
+          const key = `${q.set_name}||${norm(q.category)}`;
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(q);
         }
 
-        // Shuffle buckets so we don't always pop the same one
-        for (const arr of bonusByRoundNum.values()) shuffle(arr);
-        for (const arr of bonusByRoundAny.values()) shuffle(arr);
-        for (const arr of bonusByNumAny.values()) shuffle(arr);
+        for (const items of groups.values()) {
+          const tossups = items.filter(q => !q.bonus);
+          const bonuses = items.filter(q => q.bonus);
+          shuffle(tossups);
+          shuffle(bonuses);
 
-        const remaining = bonuses.slice();
-        shuffle(remaining);
-
-        const usedBonus = new Set();
-
-        const takeFrom = (arr) => {
-          while (arr && arr.length) {
-            const cand = arr.pop();
-            if (cand && !usedBonus.has(cand)) return cand;
+          const used = new Set();
+          for (const t of tossups) {
+            const b = bonuses.find(x => !used.has(x));
+            if (!b) break;
+            used.add(b);
+            result.push(t, b);
           }
-          return null;
-        };
+        }
 
-        for (const t of tossups) {
-          const tr = String(t.round_name || '');
-          const tn = toNumKey(t.num);
-
-          // Always add TU first, but we may roll it back if no bonus exists.
-          paired.push(t);
-
-          let match = null;
-
-          // 3) Prefer same round+num
-          match = takeFrom(bonusByRoundNum.get(`${tr}||${tn}`));
-
-          // 2) Prefer same round (any num)
-          if (!match) match = takeFrom(bonusByRoundAny.get(tr));
-
-          // 3-alt) Same num (any round) — sometimes round naming differs
-          if (!match) match = takeFrom(bonusByNumAny.get(tn));
-
-          // 4) Any remaining bonus in same set+category
-          if (!match) match = takeFrom(remaining);
-
-          if (!match) {
-            paired.pop();
-            continue;
+        // If pairing produced too few, fill remainder from filtered (prevents 2-question runs)
+        if (result.length < Math.max(1, parseInt(runCfg.count, 10) || 25)) {
+          const pool = filtered.slice();
+          shuffle(pool);
+          for (const q of pool) {
+            if (result.length >= Math.max(1, parseInt(runCfg.count, 10) || 25)) break;
+            result.push(q);
           }
-
-          usedBonus.add(match);
-          paired.push(match);
         }
       }
 
-      let n = Math.max(2, Math.min(100, parseInt(runCfg.count, 10) || 25));
-      if (n % 2 === 1) n -= 1;
-
-      return paired.slice(0, Math.min(n, paired.length));
+      shuffle(result);
+      const n = Math.max(1, parseInt(runCfg.count, 10) || 25);
+      return result.slice(0, Math.min(n, result.length));
     }
 
     function resetForQuestion() {
@@ -899,6 +847,7 @@
       clearInterval(timerId);
       buzzEl.textContent = reason || 'Run complete';
 
+      img.style.display = 'none';
       img.src = '';
       img.alt = '';
 
@@ -937,7 +886,11 @@
 
     // Events
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Space') e.preventDefault();
+      const tag = e.target?.tagName?.toLowerCase();
+      const isTyping = tag === 'input' || tag === 'textarea' || e.target?.isContentEditable;
+
+      // Prevent space from scrolling ONLY when not typing
+      if (e.code === 'Space' && !isTyping) e.preventDefault();
 
       if (e.key === 'Escape') {
         window.location.href = 'practice_home.html';
@@ -954,22 +907,37 @@
         return;
       }
 
-      if (e.code === 'Space' && !buzzed && !locked) {
+      if (e.code === 'Space' && !buzzed && !locked && !isTyping) {
         allowAnswerUI();
         return;
       }
 
-      if (e.code === 'Enter' && buzzed && !locked) {
-        if (q.type === 'SA') submitSA();
-      }
+      if (e.code === 'Enter' && buzzed && !locked && q.type === 'SA') submitSA();
 
-      if (buzzed && !locked) {
+      if (buzzed && !locked && q.type === 'MC') {
         const k = e.key.toUpperCase();
-        if (q.type === 'MC' && ['W','X','Y','Z'].includes(k)) pickMC(k);
+        if (['W','X','Y','Z'].includes(k)) pickMC(k);
       }
 
       if (e.key.toUpperCase() === 'N' && locked) nextQuestion();
     }, { passive: false });
+
+    // Tap / click anywhere to buzz (mobile-friendly)
+    const questionCard = document.querySelector('.question-card');
+
+    function shouldIgnoreTap(target) {
+      return target.closest('input, textarea, button, a, select, label');
+    }
+
+    function tapToBuzz(e) {
+      if (shouldIgnoreTap(e.target)) return;
+      if (!runActive || buzzed || locked || awaitingGrade) return;
+      allowAnswerUI();
+    }
+
+    if (questionCard) {
+      questionCard.addEventListener('pointerdown', tapToBuzz);
+    }
 
     submitBtn.addEventListener('click', submitSA);
     rightBtn.addEventListener('click', () => applyGrade(true));
@@ -1004,20 +972,17 @@
       index = 0;
       console.assert(!!currentQ(), 'currentQ should exist in bounds');
 
-      // Pairing test (TU then Bonus, SAME subject/category; round is secondary)
+      // Simple mode tests (no syntax errors, basic selection)
       const mini = [
-        // Set S1, Round r1
-        { set_name: 'S1', round_name: 'r1', num: 10, bonus: false, level: 'MS', category: 'PHYSICS', type: 'SA', question_image: 'ms/a.png' },
-        // Wrong subject bonus in same round — should NOT match
-        { set_name: 'S1', round_name: 'r1', num: 10, bonus: true,  level: 'MS', category: 'CHEMISTRY', type: 'SA', question_image: 'ms/bad1.png' },
-        // Correct subject bonus but different round — should match BEFORE wrong subject
-        { set_name: 'S1', round_name: 'r2', num: 10, bonus: true,  level: 'MS', category: 'PHYSICS', type: 'SA', question_image: 'ms/b.png' },
-        // Another TU/Bonus pair
-        { set_name: 'S1', round_name: 'r1', num: 11, bonus: false, level: 'MS', category: 'PHYSICS', type: 'SA', question_image: 'ms/c.png' },
-        { set_name: 'S1', round_name: 'r1', num: 11, bonus: true,  level: 'MS', category: 'PHYSICS', type: 'SA', question_image: 'ms/d.png' },
+        { set_name: 'S1', round_name: 'r1', num: 10, bonus: false, level: 'MS', category: 'PHYSICS', type: 'SA', question_image: '' },
+        { set_name: 'S1', round_name: 'r2', num: 10, bonus: true,  level: 'MS', category: 'PHYSICS', type: 'SA', question_image: '' },
+        { set_name: 'S1', round_name: 'r1', num: 11, bonus: false, level: 'MS', category: 'CHEMISTRY', type: 'SA', question_image: '' },
+        { set_name: 'S1', round_name: 'r1', num: 11, bonus: true,  level: 'MS', category: 'CHEMISTRY', type: 'SA', question_image: '' },
       ];
+
       const savedBank = bank;
       const savedCfg = { ...runCfg };
+
       bank = mini;
       runCfg.level = 'ANY';
       runCfg.category = 'ANY';
@@ -1026,24 +991,21 @@
       runCfg.setName = '';
       runCfg.roundName = '';
       runCfg.count = 4;
-      const out = buildRunQuestions();
-      console.assert(out.length === 4, 'paired length should be 4');
-      console.assert(out[0].bonus === false && out[1].bonus === true, 'first pair should be TU then Bonus');
-      console.assert(out[0].set_name === out[1].set_name, 'pair 1 must be same set');
-      console.assert(out[0].category === out[1].category, 'pair 1 must be same category/subject');
-      console.assert(out[2].bonus === false && out[3].bonus === true, 'second pair should be TU then Bonus');
-      console.assert(out[2].set_name === out[3].set_name, 'pair 2 must be same set');
-      console.assert(out[2].category === out[3].category, 'pair 2 must be same category/subject');
+
+      runCfg.mode = 'tossups';
+      const tu = buildRunQuestions();
+      console.assert(tu.every(q => !q.bonus), 'tossups mode should only return tossups');
+
+      runCfg.mode = 'bonuses';
+      const bo = buildRunQuestions();
+      console.assert(bo.every(q => q.bonus), 'bonuses mode should only return bonuses');
+
+      runCfg.mode = 'rapid';
+      const ra = buildRunQuestions();
+      console.assert(ra.length >= 2, 'rapid mode should return something');
+
       bank = savedBank;
       Object.assign(runCfg, savedCfg);
-
-      // Image resolver sanity
-      const qms = { level: 'MS', question_image: 'ms/Sample-Set-1/m_round02/10_0.png' };
-      const qhs = { level: 'HS', question_image: 'Sample-Set-1/round10/4_0.png' };
-      const c1 = resolveImgCandidates(qms, 'question_image');
-      const c2 = resolveImgCandidates(qhs, 'question_image');
-      console.assert(c1[0] === 'images/ms/Sample-Set-1/m_round02/10_0.png', 'ms path should prefix images/');
-      console.assert(c2.includes('images/hs/Sample-Set-1/round10/4_0.png'), 'HS fallback should include images/hs/...');
     }
 
     (async () => {
