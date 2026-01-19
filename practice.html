@@ -442,7 +442,14 @@
       </div>
 
       <p class="feedback" id="feedback"></p>
-      <div class="hint">Tip: W/X/Y/Z keys work after buzzing. Press Esc to go back. (Grading: R=Right, W=Wrong)</div>
+
+      <!-- Search / Learn buttons (hidden until graded) -->
+      <div class="row hidden" id="learnRow">
+        <button class="btn" id="searchBtn" type="button">🔍 Search</button>
+        <button class="btn" id="learnBtn" type="button">🤖 Learn</button>
+      </div>
+
+      <div class="hint">Tip: Space to buzz (tap card on mobile). W/X/Y/Z keys work after buzzing. Esc goes back. (Grading: R=Right, W=Wrong)</div>
     </div>
   </div>
 
@@ -469,8 +476,8 @@
       category: 'ANY',
       qaType: 'ANY',
       bonus: 'ANY',
-      count: 25,     // number of PAIRS
-      seconds: 20,
+      count: 25,     // rapid mode: number of PAIRS
+      seconds: 20,   // TU pre-buzz timer
       setName: '',
       roundName: ''
     };
@@ -479,6 +486,7 @@
       try { return JSON.parse(s); } catch { return fallback; }
     }
 
+    // practice_home should store settings here
     const cfg = safeParseJSON(localStorage.getItem('atom_run'), null) || {};
 
     const runCfg = {
@@ -514,6 +522,10 @@
     const errEl = document.getElementById('err');
     const metaLeft = document.getElementById('metaLeft');
     const metaRight = document.getElementById('metaRight');
+
+    const learnRow = document.getElementById('learnRow');
+    const searchBtn = document.getElementById('searchBtn');
+    const learnBtn = document.getElementById('learnBtn');
 
     // State
     let bank = [];
@@ -638,7 +650,7 @@
       return arr;
     }
 
-    // Pair builder: TU -> BO, same SUBJECT (category) is required; same set is preferred; same round is preferred.
+    // Pair builder: TU -> BO, same SUBJECT (category) required; same set preferred; same round preferred.
     function buildRunQuestions() {
       const filtered = applyFilters(bank);
       if (!filtered.length) {
@@ -749,10 +761,19 @@
       rightBtn.classList.add('hidden');
       wrongBtn.classList.add('hidden');
       nextBtn.classList.add('hidden');
+      learnRow.classList.add('hidden');
 
       buzzEl.innerHTML = 'Press <span class="kbd">SPACE</span> to buzz';
 
-      time = Math.max(5, Math.min(30, parseInt(runCfg.seconds, 10) || 20));
+      const q = currentQ();
+      const isBonus = q?.bonus === true;
+
+      // Pre-buzz timing rules
+      // TU: custom (runCfg.seconds)
+      // BO: always 20s
+      const preBuzzTime = isBonus ? 20 : Math.max(5, parseInt(runCfg.seconds, 10) || 20);
+
+      time = preBuzzTime;
       timerEl.textContent = String(time);
 
       clearInterval(timerId);
@@ -780,7 +801,9 @@
 
       input.value = '';
 
-      const isRapid = !['tossups','bonuses'].includes(String(runCfg.mode || 'rapid').toLowerCase());
+      const mode = String(runCfg.mode || 'rapid').toLowerCase();
+      const isRapid = !['tossups','bonuses'].includes(mode);
+
       if (isRapid) {
         metaLeft.textContent = `${q.level} • ${q.category} • ${q.bonus ? 'Bonus' : 'Toss-up'} • ${q.type}`;
         metaRight.textContent = `${q.set_name} / ${q.round_name} • #${q.num}`;
@@ -813,6 +836,19 @@
       buzzed = true;
       buzzEl.textContent = 'Buzzed';
       animateIn(buzzEl);
+
+      // After-buzz timing: always 5 seconds (TU & BO)
+      clearInterval(timerId);
+      time = 5;
+      timerEl.textContent = String(time);
+      timerId = setInterval(() => {
+        time -= 1;
+        timerEl.textContent = String(time);
+        if (time <= 0) {
+          clearInterval(timerId);
+          handleTimeout();
+        }
+      }, 1000);
 
       if (q.type === 'MC') {
         choicesEl.classList.remove('hidden');
@@ -854,6 +890,7 @@
       animateIn(wrongBtn);
 
       nextBtn.classList.add('hidden');
+      learnRow.classList.add('hidden');
     }
 
     function applyGrade(isRight) {
@@ -875,6 +912,10 @@
       animateIn(feedback);
       rightBtn.classList.add('hidden');
       wrongBtn.classList.add('hidden');
+
+      // Only show Search/Learn AFTER the user grades
+      learnRow.classList.remove('hidden');
+      animateIn(learnRow);
 
       nextBtn.classList.remove('hidden');
       animateIn(nextBtn);
@@ -916,6 +957,7 @@
       rightBtn.classList.add('hidden');
       wrongBtn.classList.add('hidden');
       nextBtn.classList.add('hidden');
+      learnRow.classList.add('hidden');
 
       const mode = String(runCfg.mode || 'rapid').toLowerCase();
       if (mode === 'tossups' || mode === 'bonuses') {
@@ -952,7 +994,7 @@
       const tag = e.target?.tagName?.toLowerCase();
       const isTyping = tag === 'input' || tag === 'textarea' || e.target?.isContentEditable;
 
-      // Prevent space from scrolling ONLY when not typing
+      // Prevent space from scrolling ONLY when not typing (keeps spaces working in answer box)
       if (e.code === 'Space' && !isTyping) e.preventDefault();
 
       if (e.key === 'Escape') {
@@ -1013,11 +1055,44 @@
       pickMC(btn.dataset.letter);
     });
 
+    searchBtn.addEventListener('click', () => {
+      const q = currentQ();
+      if (!q || !q.parsed_answer) return;
+      const query = encodeURIComponent(q.parsed_answer);
+      window.open(`https://www.bing.com/search?q=${query}`, '_blank');
+    });
+
+    learnBtn.addEventListener('click', () => {
+      const q = currentQ();
+      if (!q) return;
+      localStorage.setItem('atom_tutor_context', JSON.stringify({
+        answer: q.parsed_answer,
+        category: q.category,
+        level: q.level
+      }));
+      window.location.href = 'tutor.html';
+    });
+
     async function loadBank() {
-      const res = await fetch('./questions.json', { cache: 'no-store' });
-      if (!res.ok) throw new Error('questions.json not found in repo root');
-      const data = await res.json();
-      return Array.isArray(data) ? data : (data.questions || []);
+      try {
+        const res = await fetch('./questions.json', { cache: 'no-store' });
+        if (!res.ok) throw new Error('questions.json not found');
+        const data = await res.json();
+        return Array.isArray(data) ? data : (data.questions || []);
+      } catch {
+        // Backup demo question (mitochondria)
+        return [{
+          set_name: 'DEMO',
+          round_name: 'demo',
+          num: 1,
+          bonus: false,
+          level: 'MS',
+          category: 'BIOLOGY',
+          type: 'SA',
+          question_text: 'What organelle is known as the powerhouse of the cell?',
+          parsed_answer: 'MITOCHONDRIA'
+        }];
+      }
     }
 
     // Extra self-tests (console only)
@@ -1079,15 +1154,7 @@
       questions = [];
       index = 0;
 
-      try {
-        bank = await loadBank();
-      } catch (e) {
-        showError(String(e.message || e));
-        buzzEl.textContent = 'Missing questions.json';
-        progressEl.textContent = '—';
-        return;
-      }
-
+      bank = await loadBank();
       questions = buildRunQuestions();
 
       if (!questions.length) {
