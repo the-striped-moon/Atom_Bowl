@@ -749,7 +749,21 @@
       wrongBtn.classList.add('hidden');
       nextBtn.classList.add('hidden');
 
-      buzzEl.innerHTML = 'Press <span class="kbd">SPACE</span> to buzz';
+      function updateBuzzHint() {
+        const isTouch =
+          'ontouchstart' in window ||
+          navigator.maxTouchPoints > 0 ||
+          window.matchMedia('(pointer: coarse)').matches;
+      
+        if (isTouch || window.innerWidth <= 768) {
+          buzzEl.textContent = 'Tap anywhere to buzz';
+        } else {
+          buzzEl.innerHTML = 'Press <span class="kbd">SPACE</span> to buzz';
+        }
+      }
+      
+      updateBuzzHint();
+
 
       time = Math.max(5, Math.min(30, parseInt(runCfg.seconds, 10) || 20));
       timerEl.textContent = String(time);
@@ -937,12 +951,46 @@
 
     // Events
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Space') e.preventDefault();
-
+      // Allow SPACE inside inputs/textareas/contenteditable (don’t steal it for buzzing)
+      const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+      const isTypingField = tag === 'input' || tag === 'textarea' || (e.target && e.target.isContentEditable);
+    
+      // Only prevent page scroll / button focus when SPACE is used for buzzing (not while typing)
+      if (e.code === 'Space' && !isTypingField) e.preventDefault();
+    
       if (e.key === 'Escape') {
         window.location.href = 'practice_home.html';
         return;
       }
+    
+      const q = currentQ();
+      if (!runActive || !q) return;
+    
+      if (awaitingGrade) {
+        const k2 = e.key.toUpperCase();
+        if (k2 === 'R') applyGrade(true);
+        if (k2 === 'W') applyGrade(false);
+        return;
+      }
+    
+      // Buzz with SPACE (desktop)
+      if (e.code === 'Space' && !buzzed && !locked && !isTypingField) {
+        allowAnswerUI();
+        return;
+      }
+    
+      if (e.code === 'Enter' && buzzed && !locked) {
+        if (q.type === 'SA') submitSA();
+      }
+    
+      if (buzzed && !locked) {
+        const k = e.key.toUpperCase();
+        if (q.type === 'MC' && ['W','X','Y','Z'].includes(k)) pickMC(k);
+      }
+    
+      if (e.key.toUpperCase() === 'N' && locked) nextQuestion();
+    }, { passive: false });
+
 
       const q = currentQ();
       if (!runActive || !q) return;
@@ -976,11 +1024,26 @@
     wrongBtn.addEventListener('click', () => applyGrade(false));
     nextBtn.addEventListener('click', nextQuestion);
 
-    choicesEl.addEventListener('click', (e) => {
-      const btn = e.target.closest('button[data-letter]');
-      if (!btn) return;
-      pickMC(btn.dataset.letter);
-    });
+    // Mobile friendliness: tap anywhere on the question card (or buzz bar) to buzz
+    // (but don’t trigger when tapping inputs/buttons/links)
+    const questionCard = document.querySelector('.question-card');
+    
+    function shouldIgnoreTap(t) {
+      if (!t) return true;
+      return !!t.closest('button, a, input, textarea, select, label');
+    }
+    
+    function tapToBuzz(e) {
+      if (shouldIgnoreTap(e.target)) return;
+      const q = currentQ();
+      if (!runActive || !q) return;
+      if (awaitingGrade || locked || buzzed) return;
+      allowAnswerUI();
+    }
+    
+    // pointerdown covers mouse + touch; keep it snappy
+    if (questionCard) questionCard.addEventListener('pointerdown', tapToBuzz);
+    if (buzzEl) buzzEl.addEventListener('pointerdown', tapToBuzz);
 
     async function loadBank() {
       const res = await fetch('./questions.json', { cache: 'no-store' });
