@@ -225,38 +225,7 @@
       box-shadow: 0 0 0 6px rgba(79,124,255,0.10);
     }
 
-    /* Category checkboxes */
-    .cat-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 10px;
-      margin-top: 4px;
-    }
-
-    .cat {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      border-radius: 12px;
-      background: rgba(18,24,36,0.9);
-      border: 1px solid rgba(255,255,255,0.08);
-      font-weight: 700;
-      cursor: pointer;
-      transition: border-color .15s, filter .15s, transform .12s;
-      user-select: none;
-    }
-
-    .cat:hover {
-      transform: translateY(-1px);
-      border-color: rgba(79,124,255,0.35);
-      filter: brightness(1.06);
-    }
-
-    .cat input {
-      accent-color: var(--accent);
-      transform: scale(1.1);
-    }
+    /* Category (single-select dropdown) */
 
     .grid {
       display: grid;
@@ -389,24 +358,23 @@
         </div>
 
         <div class="field">
-  <label for="category">Category</label>
-  <select id="category">
-    <option value="ANY">Any</option>
-    <option value="EARTH SCIENCE">Earth Science</option>
-    <option value="EARTH AND SPACE">Earth & Space</option>
-    <option value="EARTH AND SPACE SCIENCE">Earth & Space Science</option>
-    <option value="ASTRONOMY">Astronomy</option>
-    <option value="BIOLOGY">Biology</option>
-    <option value="LIFE SCIENCE">Life Science</option>
-    <option value="CHEMISTRY">Chemistry</option>
-    <option value="PHYSICS">Physics</option>
-    <option value="PHYSICAL SCIENCE">Physical Science</option>
-    <option value="GENERAL SCIENCE">General Science</option>
-    <option value="ENERGY">Energy</option>
-    <option value="MATH">Math</option>
-    <option value="MATHEMATICS">Mathematics</option>
-  </select>
-</div>
+          <label for="category">Category</label>
+          <select id="category">
+            <option value="ANY">Any</option>
+            <option value="EARTH SCIENCE">Earth Science</option>
+            <option value="MATH">Math</option>
+            <option value="MATHEMATICS">Mathematics</option>
+            <option value="ASTRONOMY">Astronomy</option>
+            <option value="EARTH AND SPACE">Earth & Space</option>
+            <option value="EARTH AND SPACE SCIENCE">Earth & Space Science</option>
+            <option value="BIOLOGY">Biology</option>
+            <option value="LIFE SCIENCE">Life Science</option>
+            <option value="GENERAL SCIENCE">General Science</option>
+            <option value="CHEMISTRY">Chemistry</option>
+            <option value="PHYSICS">Physics</option>
+            <option value="PHYSICAL SCIENCE">Physical Science</option>
+            <option value="ENERGY">Energy</option>
+          </select>
         </div>
 
         <div class="field">
@@ -459,19 +427,19 @@
         <div class="count" id="countRapid">—</div>
       </div>
 
-      <div class="tile" onclick="startRun('tossup')">
+      <div class="tile" onclick="startRun('tossups')">
         <div class="top">
           <h3>🎯 Toss-ups</h3>
-          <span class="badge">No bonuses</span>
+          <span class="badge">Toss-ups</span>
         </div>
         <p>Only toss-ups. Great for buzzer speed and accuracy.</p>
         <div class="count" id="countToss">—</div>
       </div>
 
-      <div class="tile" onclick="startRun('bonus')">
+      <div class="tile" onclick="startRun('bonuses')">
         <div class="top">
           <h3>🧩 Bonuses</h3>
-          <span class="badge">Harder</span>
+          <span class="badge">Bonuses</span>
         </div>
         <p>Only bonuses. Train deeper content + multi-step thinking.</p>
         <div class="count" id="countBonus">—</div>
@@ -587,7 +555,7 @@
         const cfg = {
           mode,
           level: els.level.value,
-          category: getSelectedCategories(),
+          category: els.category.value,
           qaType: els.qaType.value,
           bonus: els.bonus.value,
           count: Math.max(1, parseInt(els.count.value || '25', 10)),
@@ -597,8 +565,8 @@
         };
 
         // Tile-specific rules
-        if (mode === 'tossup') cfg.bonus = 'false';
-        if (mode === 'bonus') cfg.bonus = 'true';
+        if (mode === 'tossups') cfg.bonus = 'false';
+        if (mode === 'bonuses') cfg.bonus = 'true';
         if (mode === 'wxyz') cfg.qaType = 'MC';
         if (mode === 'sa') cfg.qaType = 'SA';
 
