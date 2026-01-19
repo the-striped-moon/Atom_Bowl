@@ -478,9 +478,13 @@
       try { return JSON.parse(s); } catch { return fallback; }
     }
 
-    const cfgNew = safeParseJSON(localStorage.getItem('atom_practice_config'), null);
-    const cfgOld = safeParseJSON(localStorage.getItem('atom_run'), null);
-    const runCfg = { ...DEFAULT_RUN, ...(cfgOld || {}), ...(cfgNew || {}) };
+    const runCfg = {
+      ...DEFAULT_RUN,
+      ...safeParseJSON(localStorage.getItem('atom_practice_config'), {})
+    };
+    if (!Number.isFinite(runCfg.count) || runCfg.count < 2) {
+      runCfg.count = DEFAULT_RUN.count;
+    }
 
     runCfg.qaType = runCfg.qaType || runCfg.qtype || 'ANY';
     runCfg.seconds = runCfg.seconds || runCfg.time || DEFAULT_RUN.seconds;
