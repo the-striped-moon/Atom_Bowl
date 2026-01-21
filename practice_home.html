@@ -412,6 +412,12 @@
           <label for="seconds">Seconds per question</label>
           <input id="seconds" type="number" min="5" max="30" step="1" value="10" />
         </div>
+        
+        <label style="display:flex;align-items:center;gap:8px;margin-top:6px">
+          <input type="checkbox" id="noTimerCheck">
+          No timer (untimed practice)
+        </label>
+
 
         <div class="field" style="grid-column: span 2;">
           <label for="setName">Set name (optional)</label>
@@ -569,6 +575,7 @@
           bonus: els.bonus.value,
           count: Math.max(1, parseInt(els.count.value || '25', 10)),
           seconds: Math.max(5, Math.min(30, parseInt(els.seconds.value || '10', 10))),
+          noTimer: document.getElementById('noTimerCheck').checked,
           setName: els.setName.value.trim(),
           roundName: els.roundName.value.trim(),
           bankFile: els.bankSelect.value,
