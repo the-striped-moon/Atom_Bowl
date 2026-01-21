@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Atom Bowl — Question</title>
+  <title>Atom Bowl — Problem</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="apple-touch-icon" href="favicon.png">
@@ -424,6 +424,7 @@
     <div class="topbar">
       <div class="pill"><small>Timer</small> <span id="timer">20</span></div>
       <div class="pill"><small>Score</small> <span id="score">0</span></div>
+      <div class="pill"><small>Stopwatch</small> <span id="stopwatch">0.00 s</span></div>
       <div class="pill"><small>Progress</small> <span id="progress">—</span></div>
       <div class="pill"><small>Mode</small> <span id="mode">—</span></div>
     </div>
@@ -570,6 +571,11 @@
     };
     
     let buzzStartTime = null;
+    let questionStartTime = null;
+    let stopwatchStart = null;
+    let stopwatchInterval = null;
+    let stopwatchRunning = false;
+
 
 
     function animateIn(el) {
@@ -579,6 +585,29 @@
       el.classList.add('pop');
       setTimeout(() => el.classList.remove('pop'), 260);
     }
+    function startStopwatch() {
+        stopStopwatch();
+        stopwatchStart = Date.now();
+        stopwatchRunning = true;
+
+        stopwatchInterval = setInterval(() => {
+            const elapsed = (Date.now() - stopwatchStart) / 1000;
+            document.getElementById('stopwatch').textContent =
+            `${elapsed.toFixed(2)} s`;
+        }, 30);
+    }
+
+    function stopStopwatch() {
+        if (stopwatchInterval) clearInterval(stopwatchInterval);
+        stopwatchInterval = null;
+        stopwatchRunning = false;
+    }
+
+    function resetStopwatch() {
+        stopStopwatch();
+        document.getElementById('stopwatch').textContent = '0.00 s';
+    }
+
 
     function showError(msg) {
       if (!errEl) return;
@@ -887,11 +916,10 @@
       // Pre-buzz timing rules
       // TU: custom (runCfg.seconds)
       // BO: always 20s
-      const IMAGE_BUFFER = 5;
-      const hasImage = !!q.question_image;
-      
-      const baseTime = isBonus ? 20 : Math.max(5, parseInt(runCfg.seconds, 10) || 20);
-      const preBuzzTime = hasImage ? baseTime + IMAGE_BUFFER : baseTime;
+      const preBuzzTime = isBonus
+        ? 20
+        : Math.max(5, parseInt(runCfg.seconds, 10) || 20);
+      ;
 
 
       clearInterval(timerId);
@@ -921,6 +949,10 @@
         endRun('No question available.');
         return;
       }
+      questionStartTime = Date.now();
+      buzzStartTime = null;
+      resetStopwatch();
+      startStopwatch();
 
       updateProgressUI();
       renderQuestion(q);
@@ -955,10 +987,10 @@
     }
 
     function allowAnswerUI() {
-      buzzStartTime = Date.now();
-
       const q = currentQ();
       if (!runActive || !q) return;
+      buzzStartTime = Date.now();
+      stopStopwatch();
 
       buzzed = true;
       buzzEl.textContent = 'Buzzed';
@@ -1039,15 +1071,17 @@
       // ---- Stats update ----
       stats.answered++;
       
-      const elapsed = buzzStartTime
-        ? (Date.now() - buzzStartTime) / 1000
+      const gradeTime = Date.now();
+      
+      const totalSolveTime = questionStartTime
+        ? (gradeTime - questionStartTime) / 1000
         : 0;
       
-      stats.totalTime += elapsed;
+      stats.totalTime += totalSolveTime;
       
       if (isRight) {
         stats.correct++;
-        if (elapsed >= 10) stats.slowCorrect++;
+        if (totalSolveTime >= 10) stats.slowCorrect++;
       }
 
       if (!awaitingGrade) return;
@@ -1072,6 +1106,8 @@
       // Only show Search/Learn AFTER the user grades
       learnRow.classList.remove('hidden');
       animateIn(learnRow);
+
+      resetStopwatch();
 
       nextBtn.classList.remove('hidden');
       animateIn(nextBtn);
@@ -1136,6 +1172,7 @@
     }
 
     function nextQuestion() {
+      resetStopwatch();  
       if (!runActive) return;
       if (!locked) return;
       if (awaitingGrade) return;
