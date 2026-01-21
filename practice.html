@@ -20,6 +20,7 @@
       --muted: #9aa4b2;
       --good: #39d98a;
       --bad: #ff6b6b;
+      --warn: #f5c451;
     }
 
     * { box-sizing: border-box; }
@@ -212,6 +213,18 @@
       from { opacity: 0; transform: translateY(8px) scale(0.99); }
       to   { opacity: 1; transform: translateY(0) scale(1); }
     }
+    
+    @keyframes pulseRed {
+        0%   { box-shadow: 0 0 0 0 rgba(255,107,107,0.55); }
+        70%  { box-shadow: 0 0 0 12px rgba(255,107,107,0); }
+        100% { box-shadow: 0 0 0 0 rgba(255,107,107,0); }
+    }
+    
+    .stopwatch-pulse {
+        animation: pulseRed 1.4s infinite;
+        border-radius: 8px;
+        padding: 2px 6px;
+    }
 
     .question-img {
       width: 100%;
@@ -239,6 +252,41 @@
       from { opacity: 0; transform: translateY(6px); }
       to   { opacity: 1; transform: translateY(0); }
     }
+    .summary-info {
+        position: relative;
+        display: inline-block;
+        cursor: help;
+        margin-left: 6px;
+        color: var(--muted);
+        font-weight: 700;
+    }
+
+    .summary-info-box {
+        position: absolute;
+        bottom: 130%;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 300px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: rgba(18,24,36,0.96);
+        border: 1px solid rgba(255,255,255,0.08);
+        color: var(--text);
+        font-size: 0.85rem;
+        line-height: 1.45;
+        box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.18s ease, transform 0.18s ease;
+        z-index: 3000;
+        text-align: left;
+    }
+
+    .summary-info:hover .summary-info-box {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-4px);
+    }
+
 
     .buzz {
       margin: 18px 0 16px;
@@ -592,9 +640,11 @@
 
         stopwatchInterval = setInterval(() => {
             const elapsed = (Date.now() - stopwatchStart) / 1000;
-            document.getElementById('stopwatch').textContent =
-            `${elapsed.toFixed(2)} s`;
+            const el = document.getElementById('stopwatch');
+            el.textContent = `${elapsed.toFixed(2)} s`;
+            updateStopwatchColor(elapsed);
         }, 30);
+
     }
 
     function stopStopwatch() {
@@ -605,7 +655,28 @@
 
     function resetStopwatch() {
         stopStopwatch();
-        document.getElementById('stopwatch').textContent = '0.00 s';
+        const el = document.getElementById('stopwatch');
+        el.textContent = '0.00 s';
+        el.style.color = 'var(--text)';
+        el.classList.remove('stopwatch-pulse');
+    }
+
+    function updateStopwatchColor(seconds) {
+        const el = document.getElementById('stopwatch');
+        if (!el) return;
+
+        el.classList.remove('stopwatch-pulse');
+
+        if (seconds < 5) {
+            el.style.color = 'var(--good)';
+        } else if (seconds < 10) {
+            el.style.color = 'var(--warn)';
+        } else {
+            el.style.color = 'var(--bad)';
+            if (seconds >=20) {
+                el.classList.add('stopwatch-pulse');
+            }
+        }
     }
 
 
@@ -990,7 +1061,7 @@
       const q = currentQ();
       if (!runActive || !q) return;
       buzzStartTime = Date.now();
-      stopStopwatch();
+    
 
       buzzed = true;
       buzzEl.textContent = 'Buzzed';
@@ -1029,6 +1100,7 @@
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#039;');
     }
+
     function updateStatsUI() {
       const acc = stats.answered
         ? Math.round((stats.correct / stats.answered) * 100)
@@ -1042,6 +1114,24 @@
       document.getElementById('statSpeed').textContent = `${avg}s`;
       document.getElementById('statCorrect').textContent = stats.correct;
       document.getElementById('statSlow').textContent = stats.slowCorrect;
+    }
+
+    function computeAtomScore() {
+        if (!stats.answered || !stats.correct) return 0;
+
+        const accuracy = stats.correct / stats.answered;
+        const avgTime = stats.totalTime / stats.answered;
+        const slowRate = stats.correct
+            ? stats.slowCorrect / stats.correct
+            : 0;
+
+        const score =
+            100 *
+            Math.pow(accuracy, 1.35) *
+            (1 / (1 + avgTime / 8)) *
+            (1 - 0.45 * slowRate);
+
+        return Math.max(0, Number(score.toFixed(3)));
     }
 
 
@@ -1112,10 +1202,12 @@
       nextBtn.classList.remove('hidden');
       animateIn(nextBtn);
       updateStatsUI();
+      const atomScore = computeAtomScore();
     }
 
     function submitSA() {
       if (!runActive || !buzzed || locked) return;
+      stopStopwatch();
       const q = currentQ();
       if (!q) return;
       revealManualGrade(input.value, q.parsed_answer);
@@ -1123,6 +1215,7 @@
 
     function pickMC(letter) {
       if (!runActive || !buzzed || locked) return;
+      stopStopwatch();
       const q = currentQ();
       if (!q) return;
       revealManualGrade(letter, q.parsed_answer);
@@ -1130,6 +1223,7 @@
 
     function handleTimeout() {
       if (!runActive || locked) return;
+      stopStopwatch();
       const q = currentQ();
       if (!q) return;
       revealManualGrade('', q.parsed_answer);
@@ -1156,12 +1250,45 @@
       learnRow.classList.add('hidden');
 
       const mode = String(runCfg.mode || 'rapid').toLowerCase();
-      if (mode === 'tossups' || mode === 'bonuses') {
-        feedback.textContent = questions.length ? `Final score: ${score}/${questions.length * 4}` : '';
-      } else {
-        const totalPairs = questions.length ? Math.ceil(questions.length / 2) : 0;
-        feedback.textContent = totalPairs ? `Final score: ${score}/${totalPairs * 14}` : '';
-      }
+        let summary = '';
+
+        if (mode === 'tossups' || mode === 'bonuses') {
+        if (questions.length) {
+            summary = `Final score: ${score}/${questions.length * 4}`;
+        }
+        } else {
+        const totalPairs = questions.length
+            ? Math.ceil(questions.length / 2)
+            : 0;
+        if (totalPairs) {
+            summary = `Final score: ${score}/${totalPairs * 14}`;
+        }
+        }
+
+        const atomScore = computeAtomScore();
+        let html = summary.replace(/\n/g, '<br>');
+
+        if (atomScore) {
+            html += `
+                <br>
+                <span>
+                AtomScore®: ${atomScore}
+                <span class="summary-info">ⓘ
+                    <span class="summary-info-box">
+                    AtomScore® is a composite performance metric that combines accuracy,
+                    speed, and consistency. Accuracy is weighted most heavily. Faster
+                    solve times improve the score, while correct answers taking 10 seconds
+                    or longer reduce it. Scores are session-based and typically range
+                    from 0–100.
+                    </span>
+                </span>
+                </span>
+            `;
+        }
+
+        feedback.innerHTML = html;
+
+
       feedback.className = 'feedback';
 
       progressEl.textContent = '—';
