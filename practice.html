@@ -523,6 +523,7 @@
       <div class="pill"><small>Stopwatch</small> <span id="stopwatch">0.00 s</span></div>
       <div class="pill"><small>Progress</small> <span id="progress">—</span></div>
       <div class="pill"><small>Mode</small> <span id="mode">—</span></div>
+      <button id="ttsToggle" class="pill" title="Toggle voice">🔊</button>
       <div id="interruptBadge" class="interrupt-badge hidden">⚡INTERRUPT</div>
 
     <div class="question-card">
@@ -655,6 +656,10 @@
     runCfg.mode = runCfg.mode || DEFAULT_RUN.mode;
     document.getElementById('mode').textContent = runCfg.mode;
 
+    // Early appearances for State constants
+    let ttsEnabled = true;
+    let currentUtterance = null;
+
     // DOM
     const img = document.getElementById('questionImg');
     const questionTextEl = document.getElementById('questionText');
@@ -679,6 +684,16 @@
     const learnRow = document.getElementById('learnRow');
     const searchBtn = document.getElementById('searchBtn');
     const learnBtn = document.getElementById('learnBtn');
+    const ttsToggle = document.getElementById('ttsToggle');
+
+    if (ttsToggle) {
+      ttsToggle.onclick = () => {
+        ttsEnabled = !ttsEnabled;
+        if (!ttsEnabled) stopSpeech();
+        ttsToggle.textContent = ttsEnabled ? "🔊" : "🔇";
+      };
+    }
+
 
     // State
     let bank = [];
@@ -698,7 +713,6 @@
       totalTime: 0,         // seconds spent after buzz
       slowCorrect: 0        // correct answers taking >=10s
     };
-    
     let buzzStartTime = null;
     let questionStartTime = null;
     let stopwatchStart = null;
@@ -728,6 +742,34 @@
         }, 30);
 
     }
+    function speakText(text) {
+      if (!ttsEnabled || !window.speechSynthesis) return;
+
+      stopSpeech();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.0;       // Natural moderator pace
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+
+      // Pick a clean English voice if available
+      const voices = speechSynthesis.getVoices();
+      const preferred = voices.find(v =>
+        /en-US/i.test(v.lang) && /Google|Microsoft|Samantha/i.test(v.name)
+      );
+      if (preferred) utterance.voice = preferred;
+
+      currentUtterance = utterance;
+      speechSynthesis.speak(utterance);
+    }
+
+    function stopSpeech() {
+      if (window.speechSynthesis) {
+        speechSynthesis.cancel();
+        currentUtterance = null;
+      }
+    }
+
 
     function stopStopwatch() {
         if (stopwatchInterval) clearInterval(stopwatchInterval);
@@ -886,6 +928,7 @@
         questionTextEl.classList.remove('hidden');
         animateIn(questionTextEl);
         startTypewriter(q.question_text);
+        speakTest(q.question_text);
         return;
       }
 
@@ -1079,7 +1122,7 @@
       if (interruptBadgeEl) {
         interruptBadgeEl.classList.add('hidden');
       }
-      
+
       clearInterval(timerId);
       
       if (runCfg.noTimer) {
@@ -1419,6 +1462,7 @@
       }
 
       if (e.code === 'Space' && !buzzed && !locked && !isTyping) {
+        stopSpeech();
         const q = currentQ();
 
         // Freeze reading immediately on buzz
