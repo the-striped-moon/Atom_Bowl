@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Atom Bowl — Problem</title>
+  <title>Atom Bowl — Question</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="apple-touch-icon" href="favicon.png">
@@ -282,6 +282,11 @@
         text-align: left;
     }
 
+    .summary-info-box b {
+      display: block;
+      margin: 6px 0 4px;
+    }
+
     .summary-info:hover .summary-info-box {
     opacity: 1;
     transform: translateX(-50%) translateY(-4px);
@@ -411,12 +416,26 @@
     .btn:hover { transform: translateY(-1px); filter: brightness(1.06); }
 
     .feedback {
-      margin: 18px 0 0;
+      margin: 10px 0 18px;
       min-height: 24px;
       font-weight: 800;
       letter-spacing: 0.2px;
       text-align: center;
       white-space: pre-wrap;
+      line-height: 1.55;
+    }
+
+    .feedback .final-score {
+      font-size: 1.25rem;
+      margin-bottom: 6px;
+    }
+
+    .feedback .atom-score {
+      font-size: 1.05rem;
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .feedback.good { color: var(--good); }
@@ -1121,15 +1140,13 @@
 
         const accuracy = stats.correct / stats.answered;
         const avgTime = stats.totalTime / stats.answered;
-        const slowRate = stats.correct
-            ? stats.slowCorrect / stats.correct
-            : 0;
+        const slowRate = stats.correct / Math.max(stats.correct, 1);
 
         const score =
             100 *
-            Math.pow(accuracy, 1.35) *
-            (1 / (1 + avgTime / 8)) *
-            (1 - 0.45 * slowRate);
+            Math.pow(accuracy, 1.6) *
+            Math.exp(-avgTime / 6) *
+            (1 - 0.6 * slowRate);
 
         return Math.max(0, Number(score.toFixed(3)));
     }
@@ -1275,11 +1292,27 @@
                 AtomScore®: ${atomScore}
                 <span class="summary-info">ⓘ
                     <span class="summary-info-box">
-                    AtomScore® is a composite performance metric that combines accuracy,
-                    speed, and consistency. Accuracy is weighted most heavily. Faster
-                    solve times improve the score, while correct answers taking 10 seconds
-                    or longer reduce it. Scores are session-based and typically range
-                    from 0–100.
+                      AtomScore® is a session-based performance metric that summarizes
+                      how well you played.
+
+                      It prioritizes accuracy, rewards faster average solve times, and
+                      penalizes correct answers that took 10 seconds or longer. The score
+                      is independent of how many questions you selected.
+
+                      <b>Interpretation guide:</b>
+                      <br>
+                      85+ &nbsp;— Elite (nationals-level pace)
+                      <br>
+                      70–84 — Strong and consistent
+                      <br>
+                      50–69 — Competitive, room to improve
+                      <br>
+                      30–49 — Developing fundamentals
+                      <br>
+                      &lt;30 — Needs more practice
+
+                      AtomScore® typically ranges from 0 to 100.
+
                     </span>
                 </span>
                 </span>
