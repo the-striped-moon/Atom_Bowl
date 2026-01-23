@@ -765,6 +765,10 @@
     const searchBtn = document.getElementById('searchBtn');
     const learnBtn = document.getElementById('learnBtn');
     const ttsToggle = document.getElementById('ttsToggle');
+    const BANK_DISPLAY_NAMES = {
+      A: "Dyrapack"
+      B: "Scalazar"
+    }
     const speedSlider = document.getElementById('speedSlider')
     if (ttsToggle) {
       ttsToggle.onclick = () => {
@@ -1267,16 +1271,23 @@
       updateProgressUI();
       renderQuestion(q);
       input.value = '';
+      function findBankName(q) {
+        if (!q || !q.set_name) return '—';
+        if (q.set_name === 'SciBowlDB') return 'Scalazar';
+        return 'Dynazar';
+      }
+
+      const bankNameRegistry = findBankName(q);
 
       const mode = String(runCfg.mode || 'rapid').toLowerCase();
       const isRapid = !['tossups','bonuses'].includes(mode);
 
       if (isRapid) {
         metaLeft.textContent = `${q.level} • ${q.category} • ${q.bonus ? 'Bonus' : 'Toss-up'} • ${q.type}`;
-        metaRight.textContent = `${q.set_name} / ${q.round_name} • #${q.num}`;
+        metaRight.textContent = `${bankNameRegistry} / ${q.round_name} • #${q.num}`;
       } else {
         metaLeft.textContent = `${q.level} • ${q.category} • ${q.type}`;
-        metaRight.textContent = `${q.set_name} / ${q.round_name} • #${q.num}`;
+        metaRight.textContent = `${bankNameRegistry} / ${q.round_name} • #${q.num}`;
       }
 
       resetForQuestion();
