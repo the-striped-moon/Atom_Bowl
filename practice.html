@@ -829,6 +829,12 @@
         }, 30);
 
     }
+    speedSlider.oninput = (e) => {
+      readingSpeed = Number(e.target.value);
+      document.getElementById('speedLabel').textContent =
+        `${readingSpeed.toFixed(2)}x`;
+    };
+
     function speakText(text) {
       if (!ttsEnabled || !window.speechSynthesis) return;
 
@@ -1262,19 +1268,6 @@
 
       resetForQuestion();
 
-      // Text-to-speech (only if text exists)
-      if ('speechSynthesis' in window) {
-        const text = String(q.question_text || '').trim();
-        if (text) {
-          const prefix = q.bonus ? 'Bonus. ' : 'Toss-up. ';
-          const utter = new SpeechSynthesisUtterance(prefix + text);
-          utter.rate = 0.95;
-          utter.pitch = 1.0;
-          utter.volume = 0.9;
-          window.speechSynthesis.cancel();
-
-        }
-      }
     }
 
     function allowAnswerUI() {
