@@ -604,6 +604,7 @@
         <small id="speedLabel">1.0x</small>  
       </div>
       <div id="interruptBadge" class="interrupt-badge hidden">⚡INTERRUPT</div>
+    </div>
 
     <div class="question-card">
       <div class="buzz" id="buzz">Loading…</div>
@@ -766,7 +767,7 @@
     const learnBtn = document.getElementById('learnBtn');
     const ttsToggle = document.getElementById('ttsToggle');
     const BANK_DISPLAY_NAMES = {
-      A: "Dyrapack"
+      A: "Dyrapack",
       B: "Scalazar"
     }
     const speedSlider = document.getElementById('speedSlider')
@@ -775,11 +776,6 @@
         ttsEnabled = !ttsEnabled;
         if (!ttsEnabled) stopSpeech();
         ttsToggle.textContent = ttsEnabled ? "🔊" : "🔇";
-      };
-    }
-    if (speedSlider) {
-      speedSlider.oninput = (e) => {
-        readingSpeed = Number(e.target.value);
       };
     }
 
@@ -808,9 +804,13 @@
     let stopwatchInterval = null;
     let stopwatchRunning = false;
     let interrupted = false;
+    let baseTypeDelay = 90;
 
     
 
+    function getTypewriterDelay() {
+      return baseTypeDelay / readingSpeed;
+    }
 
 
     function animateIn(el) {
@@ -1035,7 +1035,6 @@
       // TEXT MODE
       if (q.question_text && !q.question_image) {
         questionTextEl.classList.remove('hidden');
-        warmUpSpeechSynthesis();
         animateIn(questionTextEl);
         startTypewriter(q.question_text);
         speakText(q.question_text);
@@ -1063,7 +1062,7 @@
           clearInterval(typewriterTimer);
           textFullyRevealed = true;
         }
-      }, delay);
+      }, getTypewriterDelay());
     }
 
 
@@ -1613,6 +1612,10 @@
     if (questionCard) {
       questionCard.addEventListener('pointerdown', tapToBuzz);
     }
+    window.addEventListener("load", () => {
+      warmUpSpeechSynthesis();
+    });
+
 
     submitBtn.addEventListener('click', submitSA);
     rightBtn.addEventListener('click', () => applyGrade(true));
